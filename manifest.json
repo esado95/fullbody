@@ -1,0 +1,16 @@
+{
+  "name": "Fullbody",
+  "short_name": "Fullbody",
+  "description": "Программа тренировок: план по процентам, журнал, прогресс",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF8F4",
+  "theme_color": "#C1613F",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

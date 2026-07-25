@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fullbody</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#C1613F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fullbody">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<style>
+:root{
+  --bg:#FBF8F4; --card:#FFFFFF; --ink:#2E2A26; --muted:#8C8378; --line:#EDE7E0;
+  --terra:#C1613F; --terra-bg:#F9EDE7; --olive:#6F8050; --olive-bg:#EFF3E7;
+  --amber:#C08519; --amber-bg:#FBF1DC; --input:#FFFBEE; --input-line:#E6CE95;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#17150F; --card:#211E18; --ink:#F0EAE0; --muted:#9C938A; --line:#312C24;
+    --terra:#E0805C; --terra-bg:#33211A; --olive:#9DB06F; --olive-bg:#212819;
+    --amber:#E7B04A; --amber-bg:#312613; --input:#2A2519; --input-line:#4C4128;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px}
+h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+.screen{display:none}.screen.on{display:block}
+
+.navbar{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:var(--r);
+  padding:12px 10px;margin-bottom:14px;border:1px solid var(--line)}
+.navbar button{flex:0 0 40px;height:40px;border:0;background:transparent;color:var(--muted);
+  font-size:22px;border-radius:10px;cursor:pointer}
+.navbar button:active{background:var(--bg)}
+.navbar .mid{flex:1;text-align:center;min-width:0}
+.navbar .mid b{display:block;font-size:17px;font-weight:600}
+.navbar .mid span{display:block;font-size:12.5px;color:var(--muted)}
+
+.bar{height:5px;background:var(--line);border-radius:5px;overflow:hidden;margin:0 0 16px}
+.bar>i{display:block;height:100%;background:var(--terra);border-radius:5px;transition:width .25s}
+
+.ex{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px 14px;margin-bottom:10px}
+.ex.done{background:var(--olive-bg);border-color:transparent}
+.ex.low{background:var(--terra-bg);border-color:transparent}
+.ex .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ex .nm{font-size:15.5px;font-weight:600;line-height:1.3}
+.ex .mark{font-size:19px;line-height:1;flex:0 0 auto}
+.ex .meta{font-size:12.5px;color:var(--muted);margin:3px 0 11px}
+.ex.done .meta,.ex.low .meta{color:inherit;opacity:.72}
+.ex .plan{font-weight:600}
+.fields{display:flex;gap:9px}
+.fld{flex:1;background:var(--input);border:1px solid var(--input-line);border-radius:11px;
+  padding:6px 10px 7px}
+.fld label{display:block;font-size:11px;color:var(--muted);letter-spacing:.02em}
+.fld input{width:100%;border:0;background:transparent;color:var(--ink);
+  font-size:19px;font-weight:600;padding:0;outline:none;font-family:inherit}
+.fld input::placeholder{color:var(--muted);font-weight:400;opacity:.5}
+
+.tot{display:flex;gap:10px;margin:16px 0 4px}
+.tot div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px}
+.tot span{display:block;font-size:12px;color:var(--muted)}
+.tot b{display:block;font-size:21px;font-weight:600;margin-top:2px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:15px 16px;margin-bottom:12px}
+.card h2{font-size:15px;font-weight:600;margin:0 0 4px}
+.card p.hint{font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 0 auto;min-width:52px;padding:9px 4px;border:1px solid var(--line);background:transparent;
+  color:var(--muted);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.seg button.on{background:var(--terra);border-color:var(--terra);color:#fff}
+.row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .lab{flex:1;font-size:14.5px}
+.row .val{font-size:13px;color:var(--muted);min-width:74px;text-align:right}
+.row input{width:82px;background:var(--input);border:1px solid var(--input-line);border-radius:9px;
+  padding:7px 9px;font-size:16px;font-weight:600;color:var(--ink);text-align:center;font-family:inherit}
+.btn{display:block;width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);font-size:15px;font-weight:600;margin-top:9px;
+  cursor:pointer;font-family:inherit}
+.btn:active{background:var(--bg)}
+.btn.warn{color:var(--terra);border-color:var(--terra)}
+
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);
+  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:9}
+.tabs button{flex:1;padding:11px 0 13px;border:0;background:transparent;color:var(--muted);
+  font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.tabs button i{display:block;font-style:normal;font-size:19px;margin-bottom:2px}
+.tabs button.on{color:var(--terra)}
+svg.chart{width:100%;height:190px;display:block}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:26px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section id="s-work" class="screen on">
+  <h1>Тренировка</h1>
+  <p class="sub" id="w-sub">—</p>
+  <div class="navbar">
+    <button id="w-prev" aria-label="Предыдущая">‹</button>
+    <div class="mid"><b id="w-day">—</b><span id="w-pos">—</span></div>
+    <button id="w-next" aria-label="Следующая">›</button>
+  </div>
+  <div class="bar"><i id="w-bar" style="width:0"></i></div>
+  <div id="w-list"></div>
+  <div class="tot">
+    <div><span>Тоннаж</span><b id="w-tonnage">—</b></div>
+    <div><span>Выполнено</span><b id="w-count">—</b></div>
+  </div>
+</section>
+
+<section id="s-prog" class="screen">
+  <h1>Прогресс</h1>
+  <p class="sub">Считается по твоим записям</p>
+  <div class="tot" id="p-maxes"></div>
+  <div class="card">
+    <h2>Расчётный максимум</h2>
+    <p class="hint">Лучший подход каждого цикла, пересчитанный в разовый максимум</p>
+    <div id="p-chart"></div>
+  </div>
+  <div class="card">
+    <h2>Тоннаж по циклам</h2>
+    <div id="p-tonnage"></div>
+  </div>
+  <div class="card">
+    <h2>Последние тренировки</h2>
+    <div id="p-recent"></div>
+  </div>
+</section>
+
+<section id="s-set" class="screen">
+  <h1>Настройки</h1>
+  <p class="sub">Отсюда книга берёт веса для всей программы</p>
+
+  <div class="card">
+    <h2>После перерыва</h2>
+    <p class="hint">Насколько ты сейчас слабее, чем на пике. Все веса пересчитаются сразу.</p>
+    <div class="seg" id="st-deload"></div>
+  </div>
+
+  <div class="card">
+    <h2>Мои максимумы</h2>
+    <p class="hint">Разовый максимум. Если по записям выйдет больше — возьмётся больший.</p>
+    <div id="st-maxes"></div>
+  </div>
+
+  <div class="card">
+    <h2>Шаг веса в зале</h2>
+    <p class="hint">На сколько кг реально можно изменить вес. Правь, если в твоём зале иначе.</p>
+    <div id="st-steps"></div>
+  </div>
+
+  <div class="card">
+    <h2>Данные</h2>
+    <p class="hint">История хранится на этом телефоне. Сохраняй копию время от времени.</p>
+    <button class="btn" id="st-export">Сохранить копию</button>
+    <button class="btn" id="st-import">Загрузить копию</button>
+    <button class="btn warn" id="st-reset">Стереть всю историю</button>
+    <input type="file" id="st-file" accept=".json" hidden>
+  </div>
+</section>
+
+</div>
+
+<nav class="tabs">
+  <button data-s="s-work" class="on"><i>▦</i>Тренировка</button>
+  <button data-s="s-prog"><i>◪</i>Прогресс</button>
+  <button data-s="s-set"><i>⚙</i>Настройки</button>
+</nav>
+
+<script src="data.js"></script>
+<script>
+const KEY = 'fullbody.v1';
+const DELOADS = [0, .05, .10, .15, .20, .25, .30];
+const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null};
+const load = () => {
+  try { return Object.assign({}, BLANK, JSON.parse(localStorage.getItem(KEY) || '{}')); }
+  catch { return Object.assign({}, BLANK); }
+};
+let S = load();
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+
+const days = w => DAYS.filter(d => PROGRAM.some(p => p.w === w && p.d === d));
+const items = (w, d) => PROGRAM.filter(p => p.w === w && p.d === d);
+const slot = (c, w, d) => c + '|' + w + '|' + d;
+const stepOf = n => S.steps[CATALOG[n].eq] ?? CATALOG[n].step;
+
+// Brzycki, только до 12 повторов — выше оценка перестаёт быть осмысленной
+const e1rm = (w, r) => (w > 0 && r > 0 && r <= 12) ? w * 36 / (37 - r) : 0;
+
+function allSets(name) {
+  const out = [];
+  for (const k in S.log) {
+    const e = S.log[k].sets?.[name];
+    if (e && e.w > 0) out.push({...e, cycle: +k.split('|')[0]});
+  }
+  return out;
+}
+const bestE1RM = (name, cycle) => allSets(name)
+  .filter(s => cycle === undefined || s.cycle === cycle)
+  .reduce((m, s) => Math.max(m, e1rm(s.w, s.r)), 0);
+const bestWeight = name => allSets(name).reduce((m, s) => Math.max(m, s.w), 0);
+const effMax = name => Math.max(S.maxes[name] ?? 0, bestE1RM(name));
+
+function plan(p) {
+  const c = CATALOG[p.n], step = stepOf(p.n);
+  const raw = p.pmin ? effMax(p.n) * p.pmin : Math.max(bestWeight(p.n), S.lastWeights[p.n] ?? 0);
+  if (!raw) return 0;
+  return Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step);
+}
+
+function firstUnfinished() {
+  for (let c = 1; c <= 60; c++)
+    for (let w = 1; w <= 4; w++)
+      for (const d of days(w)) {
+        const rec = S.log[slot(c, w, d)];
+        const n = rec ? Object.values(rec.sets || {}).filter(x => x.w > 0).length : 0;
+        if (n < items(w, d).length) return {c, w, d};
+      }
+  return {c: 1, w: 1, d: DAYS[0]};
+}
+if (!S.cur) S.cur = firstUnfinished();
+
+function shift(dir) {
+  const flat = [];
+  for (let w = 1; w <= 4; w++) for (const d of days(w)) flat.push({w, d});
+  let i = flat.findIndex(x => x.w === S.cur.w && x.d === S.cur.d);
+  i += dir;
+  let c = S.cur.c;
+  if (i < 0) { if (c === 1) return; c--; i = flat.length - 1; }
+  if (i >= flat.length) { c++; i = 0; }
+  S.cur = {c, w: flat[i].w, d: flat[i].d};
+  save(); renderWork();
+}
+
+function setVal(name, field, raw) {
+  const k = slot(S.cur.c, S.cur.w, S.cur.d);
+  S.log[k] = S.log[k] || {date: new Date().toISOString().slice(0, 10), sets: {}};
+  const e = S.log[k].sets[name] = S.log[k].sets[name] || {w: 0, r: 0};
+  e[field] = parseFloat(String(raw).replace(',', '.')) || 0;
+  if (!e.w && !e.r) delete S.log[k].sets[name];
+  save();
+}
+
+const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
+const pct = v => Math.round(v * 100) + '%';
+
+function renderWork() {
+  const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
+  document.getElementById('w-sub').textContent = 'Цикл ' + c + ' · неделя ' + w;
+  document.getElementById('w-day').textContent = d;
+  const di = days(w).indexOf(d) + 1;
+  document.getElementById('w-pos').textContent = 'тренировка ' + di + ' из ' + days(w).length +
+    (S.deload ? ' · просадка ' + pct(S.deload) : '');
+
+  let done = 0, tonnage = 0, html = '';
+  for (const p of list) {
+    const pl = plan(p), e = rec.sets[p.n] || {};
+    const filled = e.w > 0;
+    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
+    const cls = !filled ? '' : (pl && e.w < pl ? ' low' : ' done');
+    const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
+    const meta = p.s + ' × ' + p.r +
+      (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
+      (pl ? ' · <span class="plan">план ' + fmt(pl) + ' кг</span>' : '');
+    html += '<div class="ex' + cls + '">' +
+      '<div class="top"><div class="nm">' + p.n + '</div><div class="mark">' + mark + '</div></div>' +
+      '<div class="meta">' + meta + '</div>' +
+      '<div class="fields">' +
+      '<div class="fld"><label>вес, кг</label><input inputmode="decimal" placeholder="' +
+        (pl ? fmt(pl) : '—') + '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
+      '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
+        '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
+      '</div></div>';
+  }
+  document.getElementById('w-list').innerHTML = html;
+  document.getElementById('w-bar').style.width = (list.length ? done / list.length * 100 : 0) + '%';
+  document.getElementById('w-tonnage').textContent = tonnage ? Math.round(tonnage).toLocaleString('ru-RU') + ' кг' : '—';
+  document.getElementById('w-count').textContent = done + ' / ' + list.length;
+
+  for (const inp of document.querySelectorAll('#w-list input')) {
+    inp.addEventListener('change', ev => {
+      setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value);
+      renderWork();
+    });
+  }
+}
+
+function bars(rows, unit) {
+  if (!rows.length) return '<div class="empty">Пока нет записей</div>';
+  const mx = Math.max(...rows.map(r => r.v));
+  return rows.map(r => '<div class="row"><div class="lab">Цикл ' + r.k + '</div>' +
+    '<div style="flex:2;height:8px;background:var(--line);border-radius:8px;overflow:hidden">' +
+    '<i style="display:block;height:100%;width:' + (mx ? r.v / mx * 100 : 0) + '%;background:var(--amber)"></i></div>' +
+    '<div class="val">' + Math.round(r.v).toLocaleString('ru-RU') + ' ' + unit + '</div></div>').join('');
+}
+
+function lineChart(series) {
+  const cycles = [...new Set(Object.keys(S.log).map(k => +k.split('|')[0]))].sort((a, b) => a - b);
+  if (cycles.length < 1) return '<div class="empty">Появится после первой записи</div>';
+  const W = 480, H = 190, pad = 30;
+  const all = series.flatMap(s => s.pts.map(p => p.v)).filter(v => v > 0);
+  if (!all.length) return '<div class="empty">Появится после первой записи</div>';
+  const lo = Math.min(...all) * .93, hi = Math.max(...all) * 1.05;
+  const x = i => pad + (cycles.length > 1 ? i / (cycles.length - 1) : .5) * (W - pad * 2);
+  const y = v => H - pad - (v - lo) / (hi - lo || 1) * (H - pad * 2);
+  let out = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+  out += '<line x1="' + pad + '" y1="' + (H - pad) + '" x2="' + (W - pad) + '" y2="' + (H - pad) +
+    '" stroke="var(--line)" stroke-width="1.5"/>';
+  for (const s of series) {
+    const pts = s.pts.map((p, i) => p.v > 0 ? [x(i), y(p.v)] : null).filter(Boolean);
+    if (pts.length) {
+      if (pts.length > 1)
+        out += '<polyline fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round" points="' +
+          pts.map(p => p.join(',')).join(' ') + '"/>';
+      out += pts.map(p => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="' + s.color + '"/>').join('');
+    }
+  }
+  out += '</svg><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px">' +
+    series.map(s => '<span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
+      s.color + ';margin-right:5px"></i>' + s.label + '</span>').join('') + '</div>';
+  return out;
+}
+
+function renderProg() {
+  document.getElementById('p-maxes').innerHTML = BASE_LIFTS.map(n =>
+    '<div><span>' + n.split(' ')[0] + '</span><b>' + (effMax(n) ? fmt(Math.round(effMax(n) * 10) / 10) : '—') + '</b></div>').join('');
+
+  const cycles = [...new Set(Object.keys(S.log).map(k => +k.split('|')[0]))].sort((a, b) => a - b);
+  const colors = ['var(--terra)', 'var(--olive)', 'var(--amber)'];
+  document.getElementById('p-chart').innerHTML = lineChart(BASE_LIFTS.map((n, i) => ({
+    label: n.split(' ').slice(0, 2).join(' '), color: colors[i],
+    pts: cycles.map(c => ({k: c, v: Math.round(bestE1RM(n, c) * 10) / 10}))
+  })));
+
+  const tn = cycles.map(c => {
+    let t = 0;
+    for (const k in S.log) {
+      if (+k.split('|')[0] !== c) continue;
+      const [, w, d] = k.split('|');
+      for (const p of items(+w, d)) {
+        const e = S.log[k].sets?.[p.n];
+        if (e && e.w > 0) t += p.s * (e.r || 0) * e.w;
+      }
+    }
+    return {k: c, v: t};
+  }).filter(r => r.v > 0);
+  document.getElementById('p-tonnage').innerHTML = bars(tn, 'кг');
+
+  const recent = Object.entries(S.log)
+    .map(([k, v]) => ({k, v, n: Object.values(v.sets || {}).filter(x => x.w > 0).length}))
+    .filter(r => r.n).sort((a, b) => (b.v.date || '').localeCompare(a.v.date || '')).slice(0, 8);
+  document.getElementById('p-recent').innerHTML = recent.length ? recent.map(r => {
+    const [c, w, d] = r.k.split('|');
+    return '<div class="row"><div class="lab">' + d + '<br><span style="font-size:12px;color:var(--muted)">Цикл ' +
+      c + ' · неделя ' + w + '</span></div><div class="val">' +
+      (r.v.date ? r.v.date.split('-').reverse().slice(0, 2).join('.') : '') + '<br>' + r.n + ' упр.</div></div>';
+  }).join('') : '<div class="empty">Пока нет записей</div>';
+}
+
+function renderSet() {
+  document.getElementById('st-deload').innerHTML = DELOADS.map(v =>
+    '<button data-v="' + v + '"' + (Math.abs(v - S.deload) < 1e-9 ? ' class="on"' : '') + '>' + pct(v) + '</button>').join('');
+  for (const b of document.querySelectorAll('#st-deload button'))
+    b.onclick = () => { S.deload = +b.dataset.v; save(); renderSet(); renderWork(); };
+
+  document.getElementById('st-maxes').innerHTML = BASE_LIFTS.map(n => {
+    const best = bestE1RM(n);
+    return '<div class="row"><div class="lab">' + n + '</div>' +
+      '<div class="val">' + (best ? 'по записям ' + Math.round(best) : '') + '</div>' +
+      '<input inputmode="decimal" placeholder="—" data-n="' + n + '" value="' + (S.maxes[n] || '') + '"></div>';
+  }).join('');
+  for (const i of document.querySelectorAll('#st-maxes input'))
+    i.onchange = () => { S.maxes[i.dataset.n] = parseFloat(i.value.replace(',', '.')) || 0; save(); renderWork(); renderProg(); };
+
+  const eqs = [...new Set(Object.values(CATALOG).map(c => c.eq))].sort();
+  document.getElementById('st-steps').innerHTML = eqs.map(eq => {
+    const def = Object.values(CATALOG).find(c => c.eq === eq).step;
+    return '<div class="row"><div class="lab">' + eq + '</div><div class="val"></div>' +
+      '<input inputmode="decimal" data-eq="' + eq + '" value="' + (S.steps[eq] ?? def) + '"></div>';
+  }).join('');
+  for (const i of document.querySelectorAll('#st-steps input'))
+    i.onchange = () => { S.steps[i.dataset.eq] = parseFloat(i.value.replace(',', '.')) || 1; save(); renderWork(); };
+}
+
+document.getElementById('st-export').onclick = () => {
+  const blob = new Blob([JSON.stringify(S, null, 1)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fullbody-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+};
+document.getElementById('st-import').onclick = () => document.getElementById('st-file').click();
+document.getElementById('st-file').onchange = ev => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      S = Object.assign({}, BLANK, JSON.parse(r.result));
+      if (!S.cur) S.cur = firstUnfinished();
+      save(); renderWork(); renderProg(); renderSet();
+      alert('Копия загружена');
+    } catch { alert('Не получилось прочитать файл'); }
+  };
+  r.readAsText(f);
+};
+document.getElementById('st-reset').onclick = () => {
+  if (!confirm('Стереть всю историю тренировок? Максимумы и настройки останутся. Это не отменить.')) return;
+  S.log = {};
+  S.cur = firstUnfinished();
+  save(); renderWork(); renderProg(); renderSet();
+};
+
+document.getElementById('w-prev').onclick = () => shift(-1);
+document.getElementById('w-next').onclick = () => shift(1);
+for (const b of document.querySelectorAll('.tabs button')) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === b);
+    for (const sc of document.querySelectorAll('.screen')) sc.classList.toggle('on', sc.id === b.dataset.s);
+    if (b.dataset.s === 's-prog') renderProg();
+    if (b.dataset.s === 's-set') renderSet();
+    scrollTo(0, 0);
+  };
+}
+
+renderWork();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
