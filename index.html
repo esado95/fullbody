@@ -195,6 +195,7 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="tot">
     <div><span>Тоннаж</span><b id="w-tonnage">—</b></div>
     <div><span>Выполнено</span><b id="w-count">—</b></div>
+    <div><span>Калории</span><b id="w-kcal">—</b></div>
   </div>
 </section>
 
@@ -228,6 +229,23 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="card">
     <h2>Оформление</h2>
     <div class="themes" id="st-themes"></div>
+  </div>
+
+  <div class="card">
+    <h2>Профиль</h2>
+    <p class="hint">Нужен для оценки калорий. Она примерная — точнее не умеет никто.</p>
+    <div class="row"><div class="lab">Пол</div><div class="val"></div>
+      <select id="pf-sex" style="width:82px;background:var(--input);border:1px solid var(--input-line);
+        border-radius:9px;padding:7px 6px;font-size:15px;font-weight:600;color:var(--ink);font-family:inherit">
+        <option value="м">муж</option><option value="ж">жен</option>
+      </select></div>
+    <div class="row"><div class="lab">Возраст</div><div class="val"></div>
+      <input inputmode="numeric" id="pf-age" placeholder="—"></div>
+    <div class="row"><div class="lab">Рост, см</div><div class="val"></div>
+      <input inputmode="numeric" id="pf-h" placeholder="—"></div>
+    <div class="row"><div class="lab">Вес тела, кг</div><div class="val"></div>
+      <input inputmode="decimal" id="pf-w" placeholder="—"></div>
+    <p class="hint" id="pf-bmr" style="margin:10px 0 0"></p>
   </div>
 
   <div class="card">
@@ -287,7 +305,8 @@ const THEMES = [
   {id: 'forest',   name: 'Лес',       dots: ['#2F7D5B', '#7A8B3C', '#B87333']},
   {id: 'graphite', name: 'Графит',    dots: ['#E2643B', '#55585F', '#8A8D95']},
 ];
-const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true};
+const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true,
+  profile:{sex:'м', age:0, h:0, w:0}};
 const load = () => {
   try { return Object.assign({}, BLANK, JSON.parse(localStorage.getItem(KEY) || '{}')); }
   catch { return Object.assign({}, BLANK); }
@@ -366,16 +385,34 @@ function setVal(name, field, raw) {
 const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
 const pct = v => Math.round(v * 100) + '%';
 
-// Отдых зависит от того, силовая это работа или объёмная
-function restOf(p) {
-  if (CATALOG[p.n].grp === 'Пресс') return '45–60 сек';
+// Отдых зависит от того, силовая это работа или объёмная.
+// Вторым числом — середина диапазона в минутах, для оценки калорий.
+function restInfo(p) {
+  if (CATALOG[p.n].grp === 'Пресс') return ['45–60 сек', .9];
   if (p.pmin) {
-    if (p.r <= 4) return '4–5 мин';
-    if (p.r <= 6) return '3–4 мин';
-    if (p.r <= 8) return '2–3 мин';
-    return '90 сек – 2 мин';
+    if (p.r <= 4) return ['4–5 мин', 4.5];
+    if (p.r <= 6) return ['3–4 мин', 3.5];
+    if (p.r <= 8) return ['2–3 мин', 2.5];
+    return ['90 сек – 2 мин', 1.75];
   }
-  return p.r <= 8 ? '90 сек – 2 мин' : '60–90 сек';
+  return p.r <= 8 ? ['90 сек – 2 мин', 1.75] : ['60–90 сек', 1.25];
+}
+const restOf = p => restInfo(p)[0];
+
+// Оценка калорий по MET: тяжёлая база 6, свой вес 5, изоляция 4, пресс 3.
+// ккал/мин = MET × 3.5 × вес тела / 200; время = подходы × (подход + отдых).
+function kcalEx(p) {
+  const bw = S.profile?.w;
+  if (!bw) return 0;
+  const c = CATALOG[p.n];
+  const met = p.pmin ? 6 : (c.grp === 'Пресс' ? 3 : (c.eq === 'Свой вес' ? 5 : 4));
+  const mins = p.s * (.7 + restInfo(p)[1]);
+  return Math.round(met * 3.5 * bw / 200 * mins / 5) * 5;
+}
+function bmr() {
+  const {sex, age, h, w} = S.profile || {};
+  if (!age || !h || !w) return 0;
+  return Math.round(10 * w + 6.25 * h - 5 * age + (sex === 'ж' ? -161 : 5));
 }
 const openInfo = new Set();
 let warmOpen = false;
@@ -439,7 +476,7 @@ function renderWork() {
   document.getElementById('w-pos').textContent = 'тренировка ' + di + ' из ' + days(w).length +
     (S.deload ? ' · веса −' + pct(S.deload) : '');
 
-  let done = 0, tonnage = 0, html = '';
+  let done = 0, tonnage = 0, kcalDone = 0, html = '';
   html += '<div class="ex' + (warmOpen ? ' open' : '') + '">' +
     '<button class="more" id="warm-t" style="margin:0;padding:0;border:0">Разминка перед тренировкой · 6–8 мин' +
     '<span class="chev">›</span></button>' +
@@ -449,13 +486,15 @@ function renderWork() {
   for (const p of list) {
     const pl = plan(p), e = rec.sets[p.n] || {};
     const filled = e.w > 0;
-    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
+    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; kcalDone += kc; }
     const open = openInfo.has(p.n);
     const cls = (!filled ? '' : (pl && e.w < pl ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
+    const kc = kcalEx(p);
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
-      ' · отдых ' + restOf(p);
+      ' · отдых ' + restOf(p) +
+      (kc ? ' · ≈' + kc + ' ккал' : '');
     const ws = warmupSets(p, pl);
     html += '<div class="ex' + cls + '">' +
       '<div class="top"><div class="nm">' + p.n + '</div><div class="mark">' + mark + '</div></div>' +
@@ -476,6 +515,9 @@ function renderWork() {
   document.getElementById('w-bar').style.width = (list.length ? done / list.length * 100 : 0) + '%';
   document.getElementById('w-tonnage').textContent = tonnage ? Math.round(tonnage).toLocaleString('ru-RU') + ' кг' : '—';
   document.getElementById('w-count').textContent = done + ' / ' + list.length;
+  const kcAll = list.reduce((s, p) => s + kcalEx(p), 0);
+  document.getElementById('w-kcal').textContent = !kcAll ? '—'
+    : (kcalDone ? '≈' + kcalDone : 'до ≈' + kcAll);
 
   for (const inp of document.querySelectorAll('#w-list input')) {
     inp.addEventListener('change', ev => {
@@ -580,9 +622,21 @@ dlRange.addEventListener('input', () => {
 });
 dlRange.addEventListener('change', save);
 
+function renderBmr() {
+  const b = bmr();
+  document.getElementById('pf-bmr').textContent = b
+    ? 'Базовый обмен ≈ ' + b.toLocaleString('ru-RU') + ' ккал/сутки (Миффлин — Сан-Жеор), без учёта активности.'
+    : '';
+}
 function renderSet() {
   dlRange.value = Math.round(S.deload * 100);
   paintRange();
+
+  if (!S.profile) S.profile = {sex: 'м', age: 0, h: 0, w: 0};
+  document.getElementById('pf-sex').value = S.profile.sex || 'м';
+  for (const [id, key] of [['pf-age', 'age'], ['pf-h', 'h'], ['pf-w', 'w']])
+    document.getElementById(id).value = S.profile[key] || '';
+  renderBmr();
 
   document.getElementById('st-themes').innerHTML = THEMES.map(t =>
     '<button data-t="' + t.id + '"' + (t.id === (S.theme || '') ? ' class="on"' : '') + '><i>' +
@@ -608,6 +662,15 @@ function renderSet() {
   for (const i of document.querySelectorAll('#st-steps input'))
     i.onchange = () => { S.steps[i.dataset.eq] = parseFloat(i.value.replace(',', '.')) || 1; save(); renderWork(); };
 }
+
+document.getElementById('pf-sex').onchange = ev => {
+  S.profile.sex = ev.target.value; save(); renderBmr();
+};
+for (const [id, key] of [['pf-age', 'age'], ['pf-h', 'h'], ['pf-w', 'w']])
+  document.getElementById(id).onchange = ev => {
+    S.profile[key] = parseFloat(ev.target.value.replace(',', '.')) || 0;
+    save(); renderBmr(); renderWork();
+  };
 
 document.getElementById('st-export').onclick = () => {
   const blob = new Blob([JSON.stringify(S, null, 1)], {type: 'application/json'});
