@@ -68,6 +68,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .ex .mark{font-size:19px;line-height:1;flex:0 0 auto}
 .ex.done .mark{color:var(--a2)}.ex.low .mark{color:var(--a1)}
 .ex .meta{font-size:12.5px;color:var(--muted);margin:3px 0 11px}
+.ex .warm{font-size:12px;color:var(--muted);margin:-7px 0 10px;opacity:.85}
 .ex .plan{font-weight:600;color:var(--ink)}
 .fields{display:flex;gap:9px}
 .fld{flex:1;background:var(--input);border:1px solid var(--input-line);border-radius:11px;
@@ -377,6 +378,46 @@ function restOf(p) {
   return p.r <= 8 ? '90 сек – 2 мин' : '60–90 сек';
 }
 const openInfo = new Set();
+let warmOpen = false;
+
+// Общая разминка: база + акценты под группы мышц сегодняшнего дня
+const WARM_BASE = ['Лёгкое кардио — 5 минут', 'Суставная разминка сверху вниз: шея, плечи, таз, колени'];
+const WARM_BY_GROUP = {
+  'Ноги':    'Приседания без веса и выпады — по 12–15 раз',
+  'Спина':   'Наклоны корпуса и прогибы «кошка» — 10–12 раз',
+  'Грудь':   'Отжимания от пола — 2 × 10',
+  'Плечи':   'Махи и вращения руками — по 15 в каждую сторону',
+  'Бицепс':  'Вращения запястий и локтей — по 10',
+  'Трицепс': 'Вращения запястий и локтей — по 10',
+};
+function warmList(list) {
+  const items = [...WARM_BASE];
+  for (const g of [...new Set(list.map(p => CATALOG[p.n].grp))]) {
+    const it = WARM_BY_GROUP[g];
+    if (it && !items.includes(it)) items.push(it);
+  }
+  return items;
+}
+
+// Подводящие подходы: штанга с процентами — полная лесенка, прочее железо — один лёгкий
+function warmupSets(p, pl) {
+  const c = CATALOG[p.n];
+  if (!pl || c.grp === 'Пресс' || c.eq === 'Свой вес') return '';
+  const step = stepOf(p.n);
+  const rnd = v => Math.max(c.min, Math.round(v / step) * step);
+  if (p.pmin && c.eq === 'Штанга') {
+    const bar = c.min || 20, steps = [];
+    if (pl > bar * 2) steps.push([bar, 10]);
+    for (const [f, r] of [[.5, 5], [.7, 3], [.85, 1]]) {
+      const w = rnd(pl * f);
+      if (w > bar && w < pl - step / 2 && (!steps.length || w > steps[steps.length - 1][0]))
+        steps.push([w, r]);
+    }
+    return steps.length ? 'Подводка: ' + steps.map(s => fmt(s[0]) + ' × ' + s[1]).join(' → ') : '';
+  }
+  const w = rnd(pl * .55);
+  return w < pl ? 'Разминка: ' + fmt(w) + ' × 10' : '';
+}
 
 function detail(p) {
   const inf = INFO[p.n] || {cues: [], tip: ''};
@@ -399,6 +440,12 @@ function renderWork() {
     (S.deload ? ' · веса −' + pct(S.deload) : '');
 
   let done = 0, tonnage = 0, html = '';
+  html += '<div class="ex' + (warmOpen ? ' open' : '') + '">' +
+    '<button class="more" id="warm-t" style="margin:0;padding:0;border:0">Разминка перед тренировкой · 6–8 мин' +
+    '<span class="chev">›</span></button>' +
+    (warmOpen ? '<div class="det"><ul style="margin-bottom:0">' +
+      warmList(list).map(x => '<li>' + x + '</li>').join('') + '</ul></div>' : '') +
+    '</div>';
   for (const p of list) {
     const pl = plan(p), e = rec.sets[p.n] || {};
     const filled = e.w > 0;
@@ -409,9 +456,11 @@ function renderWork() {
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
       ' · отдых ' + restOf(p);
+    const ws = warmupSets(p, pl);
     html += '<div class="ex' + cls + '">' +
       '<div class="top"><div class="nm">' + p.n + '</div><div class="mark">' + mark + '</div></div>' +
       '<div class="meta">' + meta + '</div>' +
+      (ws ? '<div class="warm">' + ws + '</div>' : '') +
       '<div class="fields">' +
       '<div class="fld plan"><label>план, кг</label><div class="pv">' + (pl ? fmt(pl) : '—') + '</div></div>' +
       '<div class="fld"><label>вес, кг</label><input inputmode="decimal" placeholder="' +
@@ -435,12 +484,14 @@ function renderWork() {
     });
   }
   for (const b of document.querySelectorAll('#w-list .more')) {
+    if (b.id === 'warm-t') continue;
     b.onclick = () => {
       const k = b.dataset.i;
       openInfo.has(k) ? openInfo.delete(k) : openInfo.add(k);
       renderWork();
     };
   }
+  document.getElementById('warm-t').onclick = () => { warmOpen = !warmOpen; renderWork(); };
   renderSide();
 }
 
