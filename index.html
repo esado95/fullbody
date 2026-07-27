@@ -378,6 +378,8 @@ function setVal(name, field, raw) {
   S.log[k] = S.log[k] || {date: new Date().toISOString().slice(0, 10), sets: {}};
   const e = S.log[k].sets[name] = S.log[k].sets[name] || {w: 0, r: 0};
   e[field] = parseFloat(String(raw).replace(',', '.')) || 0;
+  // Время первого ввода — по нему считается реальная длительность тренировки
+  if ((e.w || e.r) && !e.t) e.t = Date.now();
   if (!e.w && !e.r) delete S.log[k].sets[name];
   save();
 }
@@ -400,14 +402,39 @@ function restInfo(p) {
 const restOf = p => restInfo(p)[0];
 
 // Оценка калорий по MET: тяжёлая база 6, свой вес 5, изоляция 4, пресс 3.
-// ккал/мин = MET × 3.5 × вес тела / 200; время = подходы × (подход + отдых).
-function kcalEx(p) {
-  const bw = S.profile?.w;
-  if (!bw) return 0;
+// Поправка Byrne 2005: ккал/мин покоя берётся из личного БО, а не «средних» 3.5 мл/кг.
+// EPOC — дожиг после силовой, +7 % к итогу.
+const EPOC = 1.07;
+const metOf = p => {
   const c = CATALOG[p.n];
-  const met = p.pmin ? 6 : (c.grp === 'Пресс' ? 3 : (c.eq === 'Свой вес' ? 5 : 4));
-  const mins = p.s * (.7 + restInfo(p)[1]);
-  return Math.round(met * 3.5 * bw / 200 * mins / 5) * 5;
+  return p.pmin ? 6 : (c.grp === 'Пресс' ? 3 : (c.eq === 'Свой вес' ? 5 : 4));
+};
+const exMins = p => p.s * (.7 + restInfo(p)[1]);
+function restRate() {              // ккал в минуту в покое
+  const b = bmr();
+  if (b) return b / 1440;
+  const bw = S.profile?.w;
+  return bw ? 3.5 * bw / 200 : 0;
+}
+function kcalEx(p) {
+  const rate = restRate();
+  return rate ? Math.round(metOf(p) * rate * exMins(p) * EPOC / 5) * 5 : 0;
+}
+// Итог за тренировку: если записи шли по ходу занятия, берём реальную
+// длительность (первый ввод → последний), иначе сумму модельных оценок.
+function kcalWorkout(list, rec) {
+  const rate = restRate();
+  if (!rate) return 0;
+  const done = list.filter(p => rec.sets[p.n]?.w > 0);
+  if (!done.length) return 0;
+  const model = done.reduce((s, p) => s + kcalEx(p), 0);
+  const ts = done.map(p => rec.sets[p.n].t).filter(Boolean);
+  if (ts.length < 2) return model;
+  const span = Math.min((Math.max(...ts) - Math.min(...ts)) / 60000, 180);
+  if (span < 15) return model;
+  const wsum = done.reduce((s, p) => s + exMins(p), 0);
+  const avgMet = done.reduce((s, p) => s + metOf(p) * exMins(p), 0) / wsum;
+  return Math.round(avgMet * rate * span * EPOC / 5) * 5;
 }
 function bmr() {
   const {sex, age, h, w} = S.profile || {};
@@ -476,7 +503,7 @@ function renderWork() {
   document.getElementById('w-pos').textContent = 'тренировка ' + di + ' из ' + days(w).length +
     (S.deload ? ' · веса −' + pct(S.deload) : '');
 
-  let done = 0, tonnage = 0, kcalDone = 0, html = '';
+  let done = 0, tonnage = 0, html = '';
   html += '<div class="ex' + (warmOpen ? ' open' : '') + '">' +
     '<button class="more" id="warm-t" style="margin:0;padding:0;border:0">Разминка перед тренировкой · 6–8 мин' +
     '<span class="chev">›</span></button>' +
@@ -486,7 +513,7 @@ function renderWork() {
   for (const p of list) {
     const pl = plan(p), e = rec.sets[p.n] || {}, kc = kcalEx(p);
     const filled = e.w > 0;
-    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; kcalDone += kc; }
+    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
     const open = openInfo.has(p.n);
     const cls = (!filled ? '' : (pl && e.w < pl ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
@@ -515,8 +542,9 @@ function renderWork() {
   document.getElementById('w-tonnage').textContent = tonnage ? Math.round(tonnage).toLocaleString('ru-RU') + ' кг' : '—';
   document.getElementById('w-count').textContent = done + ' / ' + list.length;
   const kcAll = list.reduce((s, p) => s + kcalEx(p), 0);
+  const kcDone = kcalWorkout(list, rec);
   document.getElementById('w-kcal').textContent = !kcAll ? '—'
-    : (kcalDone ? '≈' + kcalDone : 'до ≈' + kcAll);
+    : (kcDone ? '≈' + kcDone : 'до ≈' + kcAll);
 
   for (const inp of document.querySelectorAll('#w-list input')) {
     inp.addEventListener('change', ev => {
