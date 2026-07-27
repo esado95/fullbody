@@ -42,9 +42,12 @@ CATALOG = {
 BASE_LIFTS = ["Приседания со штангой", "Становая тяга", "Жим штанги лежа"]
 
 program = json.load(open("source/program.json", encoding="utf-8"))
+technique = json.load(open("source/technique.json", encoding="utf-8"))
 
 missing = sorted({p["n"] for p in program} - set(CATALOG))
 assert not missing, "нет в справочнике: " + str(missing)
+no_tech = sorted(set(CATALOG) - set(technique))
+assert not no_tech, "нет описания техники: " + str(no_tech)
 
 catalog = {n: {"grp": c[0], "eq": c[1], "step": c[2], "min": c[3]} for n, c in CATALOG.items()}
 
@@ -52,10 +55,12 @@ with open("data.js", "w", encoding="utf-8") as f:
     f.write("// Сгенерировано gen_data.py — не править вручную\n")
     f.write("const PROGRAM = " + json.dumps(program, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const CATALOG = " + json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + ";\n")
+    f.write("const INFO = " + json.dumps(technique, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const BASE_LIFTS = " + json.dumps(BASE_LIFTS, ensure_ascii=False) + ";\n")
     f.write('const DAYS = ["Понедельник","Среда","Пятница"];\n')
 
-print("упражнений в программе:", len(program), "| в справочнике:", len(catalog))
+print("упражнений в программе:", len(program), "| в справочнике:", len(catalog),
+      "| с описанием техники:", len(technique))
 
 if os.path.exists("personal.json"):
     p = json.load(open("personal.json", encoding="utf-8"))

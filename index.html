@@ -77,6 +77,18 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
   font-size:19px;font-weight:600;padding:0;outline:none;font-family:inherit}
 .fld input::placeholder{color:var(--muted);font-weight:400;opacity:.45}
 
+.more{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+  margin-top:11px;padding:9px 0 0;border:0;border-top:1px solid var(--line);background:transparent;
+  color:var(--muted);font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
+.more .chev{display:inline-block;transition:transform .2s}
+.ex.open .more .chev{transform:rotate(90deg)}
+.det{margin-top:10px;font-size:13px;color:var(--muted)}
+.det ul{margin:0 0 10px;padding-left:17px}
+.det li{margin-bottom:4px;line-height:1.35}
+.det .tip{margin:0 0 10px;padding:9px 11px;border-radius:10px;line-height:1.35;color:var(--ink);
+  background:color-mix(in srgb,var(--a3) var(--tint),var(--card))}
+.det a{color:var(--a1);text-decoration:none;font-weight:600}
+
 .tot{display:flex;gap:10px;margin:16px 0 4px}
 .tot div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px}
 .tot span{display:block;font-size:12px;color:var(--muted)}
@@ -294,6 +306,29 @@ function setVal(name, field, raw) {
 const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
 const pct = v => Math.round(v * 100) + '%';
 
+// Отдых зависит от того, силовая это работа или объёмная
+function restOf(p) {
+  if (CATALOG[p.n].grp === 'Пресс') return '45–60 сек';
+  if (p.pmin) {
+    if (p.r <= 4) return '4–5 мин';
+    if (p.r <= 6) return '3–4 мин';
+    if (p.r <= 8) return '2–3 мин';
+    return '90 сек – 2 мин';
+  }
+  return p.r <= 8 ? '90 сек – 2 мин' : '60–90 сек';
+}
+const openInfo = new Set();
+
+function detail(p) {
+  const inf = INFO[p.n] || {cues: [], tip: ''};
+  const q = encodeURIComponent(p.n + ' техника выполнения');
+  return '<div class="det">' +
+    '<ul>' + inf.cues.map(c => '<li>' + c + '</li>').join('') + '</ul>' +
+    (inf.tip ? '<p class="tip">' + inf.tip + '</p>' : '') +
+    '<a href="https://www.youtube.com/results?search_query=' + q +
+    '" target="_blank" rel="noopener">Посмотреть на видео ↗</a></div>';
+}
+
 function renderWork() {
   const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
   document.getElementById('w-sub').textContent = 'Цикл ' + c + ' · неделя ' + w;
@@ -307,7 +342,8 @@ function renderWork() {
     const pl = plan(p), e = rec.sets[p.n] || {};
     const filled = e.w > 0;
     if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
-    const cls = !filled ? '' : (pl && e.w < pl ? ' low' : ' done');
+    const open = openInfo.has(p.n);
+    const cls = (!filled ? '' : (pl && e.w < pl ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
@@ -320,7 +356,11 @@ function renderWork() {
         (pl ? fmt(pl) : '—') + '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
       '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
         '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
-      '</div></div>';
+      '</div>' +
+      '<button class="more" data-i="' + p.n + '">Отдых ' + restOf(p) +
+        ' · как делать<span class="chev">›</span></button>' +
+      (open ? detail(p) : '') +
+      '</div>';
   }
   document.getElementById('w-list').innerHTML = html;
   document.getElementById('w-bar').style.width = (list.length ? done / list.length * 100 : 0) + '%';
@@ -332,6 +372,13 @@ function renderWork() {
       setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value);
       renderWork();
     });
+  }
+  for (const b of document.querySelectorAll('#w-list .more')) {
+    b.onclick = () => {
+      const k = b.dataset.i;
+      openInfo.has(k) ? openInfo.delete(k) : openInfo.add(k);
+      renderWork();
+    };
   }
 }
 
