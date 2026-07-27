@@ -1,5 +1,5 @@
 // Кэш приложения: работает офлайн, обновляется при смене VERSION
-const VERSION = 'fullbody-v2';
+const VERSION = 'fullbody-v3';
 const ASSETS = ['.', 'index.html', 'data.js', 'manifest.json', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
