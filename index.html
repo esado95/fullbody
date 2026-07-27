@@ -84,8 +84,8 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:15px 16px;margin-bottom:12px}
-.card h2{font-size:15px;font-weight:600;margin:0 0 4px}
-.card p.hint{font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.card h2{font-size:15px;font-weight:600;margin:0 0 12px}
+.card p.hint{font-size:12.5px;color:var(--muted);margin:-8px 0 12px}
 
 .dl-val{display:flex;align-items:baseline;justify-content:center;gap:3px;margin:4px 0 12px}
 .dl-val b{font-size:42px;font-weight:600;color:var(--a1);line-height:1;letter-spacing:-.03em}
@@ -148,11 +148,9 @@ svg.chart{width:100%;height:190px;display:block}
 
 <section id="s-prog" class="screen">
   <h1>Прогресс</h1>
-  <p class="sub">Считается по твоим записям</p>
   <div class="tot" id="p-maxes"></div>
   <div class="card">
     <h2>Расчётный максимум</h2>
-    <p class="hint">Лучший подход каждого цикла, пересчитанный в разовый максимум</p>
     <div id="p-chart"></div>
   </div>
   <div class="card">
@@ -167,11 +165,9 @@ svg.chart{width:100%;height:190px;display:block}
 
 <section id="s-set" class="screen">
   <h1>Настройки</h1>
-  <p class="sub">Отсюда приложение берёт веса для всей программы</p>
 
   <div class="card">
     <h2>После перерыва</h2>
-    <p class="hint">На сколько снизить все веса, пока не вернулся в форму. Пересчитается сразу.</p>
     <div class="dl-val"><b id="dl-num">0</b><span>%</span></div>
     <input type="range" id="dl-range" min="0" max="40" step="1" value="0" aria-label="Снижение весов">
     <div class="dl-scale"><span>0</span><span>20</span><span>40</span></div>
@@ -179,25 +175,22 @@ svg.chart{width:100%;height:190px;display:block}
 
   <div class="card">
     <h2>Оформление</h2>
-    <p class="hint">Светлая или тёмная выбирается по настройкам телефона.</p>
     <div class="themes" id="st-themes"></div>
   </div>
 
   <div class="card">
     <h2>Мои максимумы</h2>
-    <p class="hint">Разовый максимум. Если по записям выйдет больше — возьмётся больший.</p>
     <div id="st-maxes"></div>
   </div>
 
   <div class="card">
     <h2>Шаг веса в зале</h2>
-    <p class="hint">На сколько кг реально можно изменить вес. Правь, если в твоём зале иначе.</p>
     <div id="st-steps"></div>
   </div>
 
   <div class="card">
     <h2>Данные</h2>
-    <p class="hint">История хранится на этом телефоне. Сохраняй копию время от времени.</p>
+    <p class="hint">История хранится на этом телефоне.</p>
     <button class="btn" id="st-export">Сохранить копию</button>
     <button class="btn" id="st-import">Загрузить копию</button>
     <button class="btn warn" id="st-reset">Стереть всю историю</button>
@@ -471,11 +464,20 @@ document.getElementById('st-file').onchange = ev => {
   const r = new FileReader();
   r.onload = () => {
     try {
-      S = Object.assign({}, BLANK, JSON.parse(r.result));
+      const data = JSON.parse(r.result);
+      // Загрузка копии заменяет состояние целиком, поэтому предупреждаем о потере истории
+      const have = Object.values(S.log).reduce((n, v) =>
+        n + Object.values(v.sets || {}).filter(x => x.w > 0).length, 0);
+      const bring = Object.values(data.log || {}).reduce((n, v) =>
+        n + Object.values(v.sets || {}).filter(x => x.w > 0).length, 0);
+      if (have && !confirm('Сейчас записано упражнений: ' + have +
+          '. Загрузка заменит их (в файле: ' + bring + '). Продолжить?')) return;
+      S = Object.assign({}, BLANK, data);
       if (!S.cur) S.cur = firstUnfinished();
       save(); applyTheme(); renderWork(); renderProg(); renderSet();
       alert('Копия загружена');
     } catch { alert('Не получилось прочитать файл'); }
+    finally { ev.target.value = ''; }
   };
   r.readAsText(f);
 };
