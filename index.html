@@ -321,11 +321,13 @@ const THEMES = [
   {id: 'forest',   name: 'Лес',       dots: ['#2F7D5B', '#7A8B3C', '#B87333']},
   {id: 'graphite', name: 'Графит',    dots: ['#E2643B', '#55585F', '#8A8D95']},
 ];
-const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true, backupAt:0,
-  profile:{sex:'м', age:0, h:0, w:0}};
+// Функция, а не константа: иначе вложенные объекты делятся по ссылке
+// между состояниями и записи утекают в шаблон.
+const BLANK = () => ({maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null,
+  theme:'', sideOpen:true, backupAt:0, profile:{sex:'м', age:0, h:0, w:0}});
 const load = () => {
-  try { return Object.assign({}, BLANK, JSON.parse(localStorage.getItem(KEY) || '{}')); }
-  catch { return Object.assign({}, BLANK); }
+  try { return Object.assign(BLANK(), JSON.parse(localStorage.getItem(KEY) || '{}')); }
+  catch { return BLANK(); }
 };
 let S = load();
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
@@ -787,7 +789,7 @@ document.getElementById('st-file').onchange = ev => {
         n + Object.values(v.sets || {}).filter(x => x.w > 0).length, 0);
       if (have && !confirm('Сейчас записано упражнений: ' + have +
           '. Загрузка заменит их (в файле: ' + bring + '). Продолжить?')) return;
-      S = Object.assign({}, BLANK, data);
+      S = Object.assign(BLANK(), data);
       if (!S.cur) S.cur = firstUnfinished();
       save(); applyTheme(); renderWork(); renderProg(); renderSet();
       alert('Копия загружена');
