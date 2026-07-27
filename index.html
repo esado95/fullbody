@@ -147,7 +147,7 @@ svg.chart{width:100%;height:190px;display:block}
 
   <div class="card">
     <h2>После перерыва</h2>
-    <p class="hint">Насколько ты сейчас слабее, чем на пике. Все веса пересчитаются сразу.</p>
+    <p class="hint">На сколько снизить все веса, пока не вернулся в форму. Пересчитается сразу.</p>
     <div class="seg" id="st-deload"></div>
   </div>
 
@@ -264,7 +264,7 @@ function renderWork() {
   document.getElementById('w-day').textContent = d;
   const di = days(w).indexOf(d) + 1;
   document.getElementById('w-pos').textContent = 'тренировка ' + di + ' из ' + days(w).length +
-    (S.deload ? ' · просадка ' + pct(S.deload) : '');
+    (S.deload ? ' · веса −' + pct(S.deload) : '');
 
   let done = 0, tonnage = 0, html = '';
   for (const p of list) {
