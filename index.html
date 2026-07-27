@@ -95,16 +95,22 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .ov .wk button.cur,.side .wk button.cur{outline:2px solid var(--a1);outline-offset:1px;color:var(--ink)}
 
 /* Широкий экран: обзор циклов живёт слева постоянной панелью */
-.side{display:none}
+.side,.side-open{display:none}
 @media(min-width:1000px){
   .side{display:block;position:fixed;top:18px;bottom:18px;left:max(14px,calc(50% - 508px));
     width:230px;overflow:auto;background:var(--card);border:1px solid var(--line);
     border-radius:var(--r);padding:14px;z-index:5}
+  .side.off{display:none}
   .side h3:first-of-type{margin-top:10px}
   .side .wk span{flex-basis:50px;font-size:12px}
   .side .wk button{padding:8px 0;font-size:12.5px}
-  #w-mid{cursor:default}
-  #w-mid .hintch{display:none}
+  .side-open.show{display:flex;position:fixed;top:18px;left:14px;z-index:5;
+    width:42px;height:42px;align-items:center;justify-content:center;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    color:var(--muted);font-size:18px;cursor:pointer}
+  .side .fold{border:0;background:transparent;color:var(--muted);font-size:18px;
+    cursor:pointer;padding:4px 8px;border-radius:8px}
+  .side .fold:active,.side-open.show:active{background:var(--bg)}
 }
 
 .more{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
@@ -246,12 +252,14 @@ svg.chart{width:100%;height:190px;display:block}
 </div>
 
 <aside class="side" id="side">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <b style="font-size:15px">Циклы</b>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+    <b style="font-size:15px;flex:1">Циклы</b>
     <button class="btn" id="side-now" style="width:auto;margin:0;padding:7px 12px;font-size:13px">К текущей</button>
+    <button class="fold" id="side-fold" aria-label="Свернуть панель">«</button>
   </div>
   <div id="side-list"></div>
 </aside>
+<button class="side-open" id="side-open" aria-label="Развернуть панель циклов">»</button>
 
 <div class="ov" id="ov">
   <div class="sheet">
@@ -278,7 +286,7 @@ const THEMES = [
   {id: 'forest',   name: 'Лес',       dots: ['#2F7D5B', '#7A8B3C', '#B87333']},
   {id: 'graphite', name: 'Графит',    dots: ['#E2643B', '#55585F', '#8A8D95']},
 ];
-const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:''};
+const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true};
 const load = () => {
   try { return Object.assign({}, BLANK, JSON.parse(localStorage.getItem(KEY) || '{}')); }
   catch { return Object.assign({}, BLANK); }
@@ -643,6 +651,15 @@ const goNow = () => {
 };
 document.getElementById('ov-now').onclick = goNow;
 document.getElementById('side-now').onclick = goNow;
+
+// Сворачивание боковой панели; состояние переживает перезапуск
+function applySide() {
+  document.getElementById('side').classList.toggle('off', !S.sideOpen);
+  document.getElementById('side-open').classList.toggle('show', !S.sideOpen);
+}
+document.getElementById('side-fold').onclick = () => { S.sideOpen = false; save(); applySide(); };
+document.getElementById('side-open').onclick = () => { S.sideOpen = true; save(); applySide(); };
+applySide();
 
 document.getElementById('w-prev').onclick = () => shift(-1);
 document.getElementById('w-next').onclick = () => shift(1);
