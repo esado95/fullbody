@@ -76,6 +76,22 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .fld input{width:100%;border:0;background:transparent;color:var(--ink);
   font-size:19px;font-weight:600;padding:0;outline:none;font-family:inherit}
 .fld input::placeholder{color:var(--muted);font-weight:400;opacity:.45}
+.fld.plan{background:transparent;border-style:dashed}
+.fld .pv{font-size:19px;font-weight:600;color:var(--a1);line-height:1.45}
+
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:none;align-items:flex-end}
+.ov.on{display:flex}
+.ov .sheet{background:var(--bg);width:100%;max-height:78vh;overflow:auto;
+  border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+.ov h3{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 8px;
+  text-transform:uppercase;letter-spacing:.04em}
+.ov .wk{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ov .wk span{flex:0 0 54px;font-size:12.5px;color:var(--muted)}
+.ov .wk button{flex:1;padding:11px 0;border-radius:10px;border:1px solid var(--line);
+  background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ov .wk button.part{border-color:var(--a3);color:var(--a3)}
+.ov .wk button.full{background:color-mix(in srgb,var(--a2) 18%,var(--card));border-color:var(--a2);color:var(--a2)}
+.ov .wk button.cur{outline:2px solid var(--a1);outline-offset:1px;color:var(--ink)}
 
 .more{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
   margin-top:11px;padding:9px 0 0;border:0;border-top:1px solid var(--line);background:transparent;
@@ -147,7 +163,10 @@ svg.chart{width:100%;height:190px;display:block}
   <p class="sub" id="w-sub">—</p>
   <div class="navbar">
     <button id="w-prev" aria-label="Предыдущая">‹</button>
-    <div class="mid"><b id="w-day">—</b><span id="w-pos">—</span></div>
+    <div class="mid" id="w-mid" role="button" style="cursor:pointer">
+      <b><span id="w-day">—</span> <span style="font-size:12px;color:var(--muted)">⌄</span></b>
+      <span id="w-pos">—</span>
+    </div>
     <button id="w-next" aria-label="Следующая">›</button>
   </div>
   <div class="bar"><i id="w-bar" style="width:0"></i></div>
@@ -210,6 +229,16 @@ svg.chart{width:100%;height:190px;display:block}
   </div>
 </section>
 
+</div>
+
+<div class="ov" id="ov">
+  <div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b style="font-size:17px">Куда перейти</b>
+      <button class="btn" id="ov-now" style="width:auto;margin:0;padding:8px 14px">К текущей</button>
+    </div>
+    <div id="ov-list"></div>
+  </div>
 </div>
 
 <nav class="tabs">
@@ -349,18 +378,18 @@ function renderWork() {
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
-      (pl ? ' · <span class="plan">план ' + fmt(pl) + ' кг</span>' : '');
+      ' · отдых ' + restOf(p);
     html += '<div class="ex' + cls + '">' +
       '<div class="top"><div class="nm">' + p.n + '</div><div class="mark">' + mark + '</div></div>' +
       '<div class="meta">' + meta + '</div>' +
       '<div class="fields">' +
+      '<div class="fld plan"><label>план, кг</label><div class="pv">' + (pl ? fmt(pl) : '—') + '</div></div>' +
       '<div class="fld"><label>вес, кг</label><input inputmode="decimal" placeholder="' +
         (pl ? fmt(pl) : '—') + '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
       '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
         '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
       '</div>' +
-      '<button class="more" data-i="' + p.n + '">Отдых ' + restOf(p) +
-        ' · как делать<span class="chev">›</span></button>' +
+      '<button class="more" data-i="' + p.n + '">Техника и видео<span class="chev">›</span></button>' +
       (open ? detail(p) : '') +
       '</div>';
   }
@@ -535,6 +564,47 @@ document.getElementById('st-reset').onclick = () => {
   S.log = {};
   S.cur = firstUnfinished();
   save(); renderWork(); renderProg(); renderSet();
+};
+
+// Обзор: сетка цикл → неделя → день, прыжок одним нажатием
+const DAY_SHORT = {'Понедельник': 'Пн', 'Среда': 'Ср', 'Пятница': 'Пт'};
+function dayState(c, w, d) {
+  const rec = S.log[slot(c, w, d)], total = items(w, d).length;
+  const n = rec ? Object.values(rec.sets || {}).filter(x => x.w > 0).length : 0;
+  return n === 0 ? '' : (n >= total ? 'full' : 'part');
+}
+function renderOverview() {
+  const logged = Object.keys(S.log).map(k => +k.split('|')[0]);
+  const maxC = Math.max(S.cur.c + 1, logged.length ? Math.max(...logged) + 1 : 0, 2);
+  let h = '';
+  for (let c = 1; c <= maxC; c++) {
+    h += '<h3>Цикл ' + c + '</h3>';
+    for (let w = 1; w <= 4; w++) {
+      h += '<div class="wk"><span>Неделя ' + w + '</span>' + days(w).map(d => {
+        const cur = S.cur.c === c && S.cur.w === w && S.cur.d === d;
+        return '<button class="' + dayState(c, w, d) + (cur ? ' cur' : '') +
+          '" data-j="' + c + '|' + w + '|' + d + '">' + DAY_SHORT[d] + '</button>';
+      }).join('') + '</div>';
+    }
+  }
+  document.getElementById('ov-list').innerHTML = h;
+  for (const b of document.querySelectorAll('#ov-list button')) {
+    b.onclick = () => {
+      const [c, w, d] = b.dataset.j.split('|');
+      S.cur = {c: +c, w: +w, d};
+      save(); renderWork(); closeOverview();
+    };
+  }
+  document.querySelector('#ov .cur')?.scrollIntoView({block: 'center'});
+}
+const ovEl = document.getElementById('ov');
+function openOverview() { renderOverview(); ovEl.classList.add('on'); }
+function closeOverview() { ovEl.classList.remove('on'); }
+document.getElementById('w-mid').onclick = openOverview;
+ovEl.onclick = ev => { if (ev.target === ovEl) closeOverview(); };
+document.getElementById('ov-now').onclick = () => {
+  S.cur = firstUnfinished();
+  save(); renderWork(); closeOverview();
 };
 
 document.getElementById('w-prev').onclick = () => shift(-1);
