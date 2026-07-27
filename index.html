@@ -484,13 +484,12 @@ function renderWork() {
       warmList(list).map(x => '<li>' + x + '</li>').join('') + '</ul></div>' : '') +
     '</div>';
   for (const p of list) {
-    const pl = plan(p), e = rec.sets[p.n] || {};
+    const pl = plan(p), e = rec.sets[p.n] || {}, kc = kcalEx(p);
     const filled = e.w > 0;
     if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; kcalDone += kc; }
     const open = openInfo.has(p.n);
     const cls = (!filled ? '' : (pl && e.w < pl ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
-    const kc = kcalEx(p);
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
       ' · отдых ' + restOf(p) +
