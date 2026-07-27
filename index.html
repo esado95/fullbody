@@ -83,15 +83,29 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .ov.on{display:flex}
 .ov .sheet{background:var(--bg);width:100%;max-height:78vh;overflow:auto;
   border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
-.ov h3{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 8px;
+.ov h3,.side h3{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 8px;
   text-transform:uppercase;letter-spacing:.04em}
-.ov .wk{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.ov .wk span{flex:0 0 54px;font-size:12.5px;color:var(--muted)}
-.ov .wk button{flex:1;padding:11px 0;border-radius:10px;border:1px solid var(--line);
+.ov .wk,.side .wk{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ov .wk span,.side .wk span{flex:0 0 54px;font-size:12.5px;color:var(--muted)}
+.ov .wk button,.side .wk button{flex:1;padding:11px 0;border-radius:10px;border:1px solid var(--line);
   background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.ov .wk button.part{border-color:var(--a3);color:var(--a3)}
-.ov .wk button.full{background:color-mix(in srgb,var(--a2) 18%,var(--card));border-color:var(--a2);color:var(--a2)}
-.ov .wk button.cur{outline:2px solid var(--a1);outline-offset:1px;color:var(--ink)}
+.ov .wk button.part,.side .wk button.part{border-color:var(--a3);color:var(--a3)}
+.ov .wk button.full,.side .wk button.full{background:color-mix(in srgb,var(--a2) 18%,var(--card));
+  border-color:var(--a2);color:var(--a2)}
+.ov .wk button.cur,.side .wk button.cur{outline:2px solid var(--a1);outline-offset:1px;color:var(--ink)}
+
+/* Широкий экран: обзор циклов живёт слева постоянной панелью */
+.side{display:none}
+@media(min-width:1000px){
+  .side{display:block;position:fixed;top:18px;bottom:18px;left:max(14px,calc(50% - 508px));
+    width:230px;overflow:auto;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:14px;z-index:5}
+  .side h3:first-of-type{margin-top:10px}
+  .side .wk span{flex-basis:50px;font-size:12px}
+  .side .wk button{padding:8px 0;font-size:12.5px}
+  #w-mid{cursor:default}
+  #w-mid .hintch{display:none}
+}
 
 .more{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
   margin-top:11px;padding:9px 0 0;border:0;border-top:1px solid var(--line);background:transparent;
@@ -164,7 +178,7 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="navbar">
     <button id="w-prev" aria-label="Предыдущая">‹</button>
     <div class="mid" id="w-mid" role="button" style="cursor:pointer">
-      <b><span id="w-day">—</span> <span style="font-size:12px;color:var(--muted)">⌄</span></b>
+      <b><span id="w-day">—</span> <span class="hintch" style="font-size:12px;color:var(--muted)">⌄</span></b>
       <span id="w-pos">—</span>
     </div>
     <button id="w-next" aria-label="Следующая">›</button>
@@ -230,6 +244,14 @@ svg.chart{width:100%;height:190px;display:block}
 </section>
 
 </div>
+
+<aside class="side" id="side">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <b style="font-size:15px">Циклы</b>
+    <button class="btn" id="side-now" style="width:auto;margin:0;padding:7px 12px;font-size:13px">К текущей</button>
+  </div>
+  <div id="side-list"></div>
+</aside>
 
 <div class="ov" id="ov">
   <div class="sheet">
@@ -411,6 +433,7 @@ function renderWork() {
       renderWork();
     };
   }
+  renderSide();
 }
 
 function bars(rows, unit) {
@@ -573,7 +596,7 @@ function dayState(c, w, d) {
   const n = rec ? Object.values(rec.sets || {}).filter(x => x.w > 0).length : 0;
   return n === 0 ? '' : (n >= total ? 'full' : 'part');
 }
-function renderOverview() {
+function overviewHTML() {
   const logged = Object.keys(S.log).map(k => +k.split('|')[0]);
   const maxC = Math.max(S.cur.c + 1, logged.length ? Math.max(...logged) + 1 : 0, 2);
   let h = '';
@@ -587,37 +610,50 @@ function renderOverview() {
       }).join('') + '</div>';
     }
   }
-  document.getElementById('ov-list').innerHTML = h;
-  for (const b of document.querySelectorAll('#ov-list button')) {
-    b.onclick = () => {
-      const [c, w, d] = b.dataset.j.split('|');
-      S.cur = {c: +c, w: +w, d};
-      save(); renderWork(); closeOverview();
-    };
-  }
+  return h;
+}
+function jumpTo(key) {
+  const [c, w, d] = key.split('|');
+  S.cur = {c: +c, w: +w, d};
+  save(); renderWork(); closeOverview();
+  showScreen('s-work');
+}
+function fillOverview(listId) {
+  const el = document.getElementById(listId);
+  el.innerHTML = overviewHTML();
+  for (const b of el.querySelectorAll('button')) b.onclick = () => jumpTo(b.dataset.j);
+}
+function renderOverview() {
+  fillOverview('ov-list');
   document.querySelector('#ov .cur')?.scrollIntoView({block: 'center'});
 }
+function renderSide() { fillOverview('side-list'); }
 const ovEl = document.getElementById('ov');
 function openOverview() { renderOverview(); ovEl.classList.add('on'); }
 function closeOverview() { ovEl.classList.remove('on'); }
-document.getElementById('w-mid').onclick = openOverview;
+document.getElementById('w-mid').onclick = () => {
+  // На широком экране обзор и так слева — шторка не нужна
+  if (getComputedStyle(document.getElementById('side')).display === 'none') openOverview();
+};
 ovEl.onclick = ev => { if (ev.target === ovEl) closeOverview(); };
-document.getElementById('ov-now').onclick = () => {
+const goNow = () => {
   S.cur = firstUnfinished();
   save(); renderWork(); closeOverview();
+  showScreen('s-work');
 };
+document.getElementById('ov-now').onclick = goNow;
+document.getElementById('side-now').onclick = goNow;
 
 document.getElementById('w-prev').onclick = () => shift(-1);
 document.getElementById('w-next').onclick = () => shift(1);
-for (const b of document.querySelectorAll('.tabs button')) {
-  b.onclick = () => {
-    for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === b);
-    for (const sc of document.querySelectorAll('.screen')) sc.classList.toggle('on', sc.id === b.dataset.s);
-    if (b.dataset.s === 's-prog') renderProg();
-    if (b.dataset.s === 's-set') renderSet();
-    scrollTo(0, 0);
-  };
+function showScreen(id) {
+  for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x.dataset.s === id);
+  for (const sc of document.querySelectorAll('.screen')) sc.classList.toggle('on', sc.id === id);
+  if (id === 's-prog') renderProg();
+  if (id === 's-set') renderSet();
+  scrollTo(0, 0);
 }
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showScreen(b.dataset.s);
 
 renderWork();
 renderSet();
