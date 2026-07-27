@@ -218,7 +218,7 @@ svg.chart{width:100%;height:190px;display:block}
   <button data-s="s-set"><i>⚙</i>Настройки</button>
 </nav>
 
-<script src="data.js?v=5"></script>
+<script src="data.js?v=6"></script>
 <script>
 const KEY = 'fullbody.v1';
 const THEMES = [
@@ -321,12 +321,14 @@ const openInfo = new Set();
 
 function detail(p) {
   const inf = INFO[p.n] || {cues: [], tip: ''};
-  const q = encodeURIComponent(p.n + ' техника выполнения');
+  // Прямая ссылка на проверенный ролик; поиск — только если ролика нет
+  const href = inf.video || 'https://www.youtube.com/results?search_query=' +
+    encodeURIComponent(p.n + ' техника выполнения');
   return '<div class="det">' +
     '<ul>' + inf.cues.map(c => '<li>' + c + '</li>').join('') + '</ul>' +
     (inf.tip ? '<p class="tip">' + inf.tip + '</p>' : '') +
-    '<a href="https://www.youtube.com/results?search_query=' + q +
-    '" target="_blank" rel="noopener">Посмотреть на видео ↗</a></div>';
+    '<a href="' + href + '" target="_blank" rel="noopener">' +
+    (inf.video ? 'Видео: техника выполнения ↗' : 'Найти видео ↗') + '</a></div>';
 }
 
 function renderWork() {
