@@ -69,6 +69,18 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .ex.done .mark{color:var(--a2)}.ex.low .mark{color:var(--a1)}
 .ex .meta{font-size:12.5px;color:var(--muted);margin:3px 0 11px}
 .ex .warm{font-size:12px;color:var(--muted);margin:-7px 0 10px;opacity:.85}
+.ex .top{cursor:pointer}
+.ex .ic{font-size:13px;color:var(--muted);opacity:.7;font-weight:400}
+.ex.open .ic{color:var(--a1);opacity:1}
+.fld .up{font-size:13px;color:var(--a2);font-weight:600}
+
+.hintbar{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;
+  border-radius:var(--r);font-size:12.5px;color:var(--ink);
+  background:color-mix(in srgb,var(--a3) var(--tint),var(--card));
+  border:1px solid color-mix(in srgb,var(--a3) 35%,var(--card))}
+.hintbar span{flex:1}
+.hintbar button{border:1px solid var(--a3);background:transparent;color:var(--a3);
+  border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
 .ex .plan{font-weight:600;color:var(--ink)}
 .fields{display:flex;gap:9px}
 .fld{flex:1;background:var(--input);border:1px solid var(--input-line);border-radius:11px;
@@ -191,6 +203,10 @@ svg.chart{width:100%;height:190px;display:block}
     <button id="w-next" aria-label="Следующая">›</button>
   </div>
   <div class="bar"><i id="w-bar" style="width:0"></i></div>
+  <div class="hintbar" id="w-backup" hidden>
+    <span id="w-backup-t"></span>
+    <button id="w-backup-b">Сохранить</button>
+  </div>
   <div id="w-list"></div>
   <div class="tot">
     <div><span>Тоннаж</span><b id="w-tonnage">—</b></div>
@@ -305,7 +321,7 @@ const THEMES = [
   {id: 'forest',   name: 'Лес',       dots: ['#2F7D5B', '#7A8B3C', '#B87333']},
   {id: 'graphite', name: 'Графит',    dots: ['#E2643B', '#55585F', '#8A8D95']},
 ];
-const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true,
+const BLANK = {maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, theme:'', sideOpen:true, backupAt:0,
   profile:{sex:'м', age:0, h:0, w:0}};
 const load = () => {
   try { return Object.assign({}, BLANK, JSON.parse(localStorage.getItem(KEY) || '{}')); }
@@ -330,11 +346,24 @@ const e1rm = (w, r) => (w > 0 && r > 0 && r <= 12) ? w * 36 / (37 - r) : 0;
 
 function allSets(name) {
   const out = [];
+  let i = 0;
   for (const k in S.log) {
     const e = S.log[k].sets?.[name];
-    if (e && e.w > 0) out.push({...e, cycle: +k.split('|')[0]});
+    if (e && e.w > 0) out.push({...e, cycle: +k.split('|')[0], k, i});
+    i++;
   }
   return out;
+}
+// Записи прошлых тренировок: текущая исключена, иначе план прыгал бы
+// прямо во время ввода и тут же помечал только что сделанный подход как недобор.
+const priorSets = name => {
+  const cur = slot(S.cur.c, S.cur.w, S.cur.d);
+  return allSets(name).filter(s => s.k !== cur);
+};
+function lastOf(sets) {
+  if (!sets.length) return null;
+  const withT = sets.filter(s => s.t);
+  return (withT.length ? withT : sets).reduce((a, b) => ((b.t || b.i) > (a.t || a.i) ? b : a));
 }
 const bestE1RM = (name, cycle) => allSets(name)
   .filter(s => cycle === undefined || s.cycle === cycle)
@@ -342,9 +371,27 @@ const bestE1RM = (name, cycle) => allSets(name)
 const bestWeight = name => allSets(name).reduce((m, s) => Math.max(m, s.w), 0);
 const effMax = name => Math.max(S.maxes[name] ?? 0, bestE1RM(name));
 
+// Максимум для планирования — только по прошлым тренировкам
+const planMax = name => Math.max(S.maxes[name] ?? 0,
+  priorSets(name).reduce((m, s) => Math.max(m, e1rm(s.w, s.r)), 0));
+
+// Подсобка: сделал все повторы на своём лучшем весе — в следующий раз шаг вверх
+function accessoryBump(p) {
+  const prior = priorSets(p.n);
+  const best = prior.reduce((m, s) => Math.max(m, s.w), 0);
+  if (!best) return false;
+  const last = lastOf(prior);
+  return !!(last && last.w >= best && last.r >= p.r);
+}
+function accessoryBase(p) {
+  const best = priorSets(p.n).reduce((m, s) => Math.max(m, s.w), 0);
+  const base = Math.max(best, S.lastWeights[p.n] ?? 0);
+  return base && accessoryBump(p) ? base + stepOf(p.n) : base;
+}
+
 function plan(p) {
   const c = CATALOG[p.n], step = stepOf(p.n);
-  const raw = p.pmin ? effMax(p.n) * p.pmin : Math.max(bestWeight(p.n), S.lastWeights[p.n] ?? 0);
+  const raw = p.pmin ? planMax(p.n) * p.pmin : accessoryBase(p);
   if (!raw) return 0;
   return Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step);
 }
@@ -444,6 +491,29 @@ function bmr() {
 const openInfo = new Set();
 let warmOpen = false;
 
+// Копию делают руками и про неё забывают — считаем тренировки с последнего раза
+const doneWorkouts = () => Object.values(S.log)
+  .filter(v => Object.values(v.sets || {}).some(x => x.w > 0)).length;
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(S, null, 1)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fullbody-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  S.backupAt = doneWorkouts();
+  save();
+  renderBackupHint();
+}
+function renderBackupHint() {
+  const n = doneWorkouts() - (S.backupAt || 0);
+  const bar = document.getElementById('w-backup');
+  bar.hidden = n < 6;
+  if (!bar.hidden)
+    document.getElementById('w-backup-t').textContent =
+      'Тренировок без резервной копии: ' + n + '. История живёт только на этом телефоне.';
+}
+
 // Общая разминка: база + акценты под группы мышц сегодняшнего дня
 const WARM_BASE = ['Лёгкое кардио — 5 минут', 'Суставная разминка сверху вниз: шея, плечи, таз, колени'];
 const WARM_BY_GROUP = {
@@ -511,7 +581,7 @@ function renderWork() {
       warmList(list).map(x => '<li>' + x + '</li>').join('') + '</ul></div>' : '') +
     '</div>';
   for (const p of list) {
-    const pl = plan(p), e = rec.sets[p.n] || {}, kc = kcalEx(p);
+    const pl = plan(p), e = rec.sets[p.n] || {};
     const filled = e.w > 0;
     if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
     const open = openInfo.has(p.n);
@@ -519,21 +589,22 @@ function renderWork() {
     const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
-      ' · отдых ' + restOf(p) +
-      (kc ? ' · ≈' + kc + ' ккал' : '');
-    const ws = warmupSets(p, pl);
+      ' · отдых ' + restOf(p);
+    // Подводка нужна только до первого рабочего подхода
+    const ws = filled ? '' : warmupSets(p, pl);
+    const bump = pl && !p.pmin && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
     html += '<div class="ex' + cls + '">' +
-      '<div class="top"><div class="nm">' + p.n + '</div><div class="mark">' + mark + '</div></div>' +
+      '<div class="top" data-i="' + p.n + '"><div class="nm">' + p.n +
+        ' <span class="ic">ⓘ</span></div><div class="mark">' + mark + '</div></div>' +
       '<div class="meta">' + meta + '</div>' +
       (ws ? '<div class="warm">' + ws + '</div>' : '') +
       '<div class="fields">' +
-      '<div class="fld plan"><label>план, кг</label><div class="pv">' + (pl ? fmt(pl) : '—') + '</div></div>' +
+      '<div class="fld plan"><label>план, кг</label><div class="pv">' + (pl ? fmt(pl) : '—') + bump + '</div></div>' +
       '<div class="fld"><label>вес, кг</label><input inputmode="decimal" placeholder="' +
         (pl ? fmt(pl) : '—') + '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
       '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
         '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
       '</div>' +
-      '<button class="more" data-i="' + p.n + '">Техника и видео<span class="chev">›</span></button>' +
       (open ? detail(p) : '') +
       '</div>';
   }
@@ -552,15 +623,15 @@ function renderWork() {
       renderWork();
     });
   }
-  for (const b of document.querySelectorAll('#w-list .more')) {
-    if (b.id === 'warm-t') continue;
-    b.onclick = () => {
-      const k = b.dataset.i;
+  for (const t of document.querySelectorAll('#w-list .top[data-i]')) {
+    t.onclick = () => {
+      const k = t.dataset.i;
       openInfo.has(k) ? openInfo.delete(k) : openInfo.add(k);
       renderWork();
     };
   }
   document.getElementById('warm-t').onclick = () => { warmOpen = !warmOpen; renderWork(); };
+  renderBackupHint();
   renderSide();
 }
 
@@ -699,14 +770,8 @@ for (const [id, key] of [['pf-age', 'age'], ['pf-h', 'h'], ['pf-w', 'w']])
     save(); renderBmr(); renderWork();
   };
 
-document.getElementById('st-export').onclick = () => {
-  const blob = new Blob([JSON.stringify(S, null, 1)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'fullbody-' + new Date().toISOString().slice(0, 10) + '.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-};
+document.getElementById('st-export').onclick = exportBackup;
+document.getElementById('w-backup-b').onclick = exportBackup;
 document.getElementById('st-import').onclick = () => document.getElementById('st-file').click();
 document.getElementById('st-file').onchange = ev => {
   const f = ev.target.files[0];
