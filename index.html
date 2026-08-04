@@ -107,7 +107,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .fld input{width:100%;border:0;background:transparent;color:var(--ink);
   font-size:19px;font-weight:600;padding:0;outline:none;font-family:inherit}
 .fld input::placeholder{color:var(--muted);font-weight:400;opacity:.45}
-.fld.plan{background:transparent;border-style:dashed}
+.fld.plan{background:transparent;border-style:dashed;cursor:pointer}
 .fld .pv{font-size:19px;font-weight:600;color:var(--a1);line-height:1.45}
 .fld .own{font-size:13px;font-weight:600;color:var(--muted)}
 
@@ -346,7 +346,7 @@ const THEMES = [
 ];
 // Функция, а не константа: иначе вложенные объекты делятся по ссылке
 // между состояниями и записи утекают в шаблон.
-const BLANK = () => ({maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null,
+const BLANK = () => ({maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null, planSet:{},
   theme:'', sideOpen:true, profile:{sex:'м', age:0, h:0, w:0}});
 const load = () => {
   try { return Object.assign(BLANK(), JSON.parse(localStorage.getItem(KEY) || '{}')); }
@@ -412,17 +412,24 @@ const tonnageOf = (p, e) => p.s * (e.r || 0) * ((e.w || 0) + bodyLoad(p.n));
 const planMax = name => Math.max(S.maxes[name] ?? 0,
   priorSets(name).reduce((m, s) => Math.max(m, e1rm(s.w, s.r)), 0));
 
+// Если план задан руками, всё, что было записано до этого, в расчёт не идёт —
+// иначе ошибочная запись держала бы план завышенным навсегда.
+const priorFor = p => {
+  const ov = S.planSet?.[p.n];
+  return priorSets(p.n).filter(x => !ov || (x.t || 0) > ov.t);
+};
 // Подсобка: сделал все повторы на своём лучшем весе — в следующий раз шаг вверх
 function accessoryBump(p) {
-  const prior = priorSets(p.n);
+  const prior = priorFor(p);
   const best = prior.reduce((m, s) => Math.max(m, s.w), 0);
   if (!best) return false;
   const last = lastOf(prior);
   return !!(last && last.w >= best && last.r >= p.r);
 }
 function accessoryBase(p) {
-  const best = priorSets(p.n).reduce((m, s) => Math.max(m, s.w), 0);
-  const base = Math.max(best, S.lastWeights[p.n] ?? 0);
+  const ov = S.planSet?.[p.n];
+  const best = priorFor(p).reduce((m, s) => Math.max(m, s.w), 0);
+  const base = ov ? Math.max(ov.v, best) : Math.max(best, S.lastWeights[p.n] ?? 0);
   return base && accessoryBump(p) ? base + stepOf(p.n) : base;
 }
 
@@ -637,7 +644,7 @@ function renderWork() {
       '<div class="meta">' + meta + '</div>' +
       (ws ? '<div class="warm">' + ws + '</div>' : '') +
       '<div class="fields">' +
-      '<div class="fld plan"><label>план, кг</label><div class="pv">' +
+      '<div class="fld plan" data-p="' + p.n + '"><label>план, кг ✎</label><div class="pv">' +
         (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
         bump + '</div></div>' +
       '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
@@ -664,6 +671,21 @@ function renderWork() {
       setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value);
       renderWork();
     });
+  }
+  for (const el of document.querySelectorAll('#w-list .fld.plan[data-p]')) {
+    el.onclick = () => {
+      const p = list.find(x => x.n === el.dataset.p);
+      if (byPct(p)) { flash('Здесь план считается от максимума — меняй его в настройках'); return; }
+      const cur = plan(p) || '';
+      const v = prompt(p.n + '\nПлановый вес в кг. Оставь пусто, чтобы сбросить.', cur);
+      if (v === null) return;
+      const num = parseFloat(String(v).replace(',', '.'));
+      const val = isFinite(num) && num > 0 ? num : 0;
+      S.planSet = S.planSet || {};
+      S.planSet[p.n] = {v: val, t: Date.now()};
+      save(); renderWork();
+      flash(val ? 'План: ' + fmt(val) + ' кг' : 'План сброшен');
+    };
   }
   for (const t of document.querySelectorAll('#w-list .top[data-i]')) {
     t.onclick = () => {
