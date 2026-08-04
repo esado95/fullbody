@@ -106,6 +106,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .fld input::placeholder{color:var(--muted);font-weight:400;opacity:.45}
 .fld.plan{background:transparent;border-style:dashed}
 .fld .pv{font-size:19px;font-weight:600;color:var(--a1);line-height:1.45}
+.fld .own{font-size:13px;font-weight:600;color:var(--muted)}
 
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:none;align-items:flex-end}
 .ov.on{display:flex}
@@ -368,7 +369,7 @@ function allSets(name) {
   let i = 0;
   for (const k in S.log) {
     const e = S.log[k].sets?.[name];
-    if (e && e.w > 0) out.push({...e, cycle: +k.split('|')[0], k, i});
+    if (e && (e.w > 0 || e.r > 0)) out.push({...e, cycle: +k.split('|')[0], k, i});
     i++;
   }
   return out;
@@ -390,6 +391,18 @@ const bestE1RM = (name, cycle) => allSets(name)
 const bestWeight = name => allSets(name).reduce((m, s) => Math.max(m, s.w), 0);
 const effMax = name => Math.max(S.maxes[name] ?? 0, bestE1RM(name));
 
+// Своим весом: штанги нет, поле веса означает отягощение и заполнять его не нужно
+const bwEx = n => CATALOG[n]?.eq === 'Свой вес';
+// Что реально поднимается: подтягивания и брусья — всё тело, пресс — примерно половина
+const bodyLoad = n => {
+  const w = S.profile?.w || 0;
+  if (!bwEx(n) || !w) return 0;
+  return CATALOG[n].grp === 'Пресс' ? w * .5 : w;
+};
+// Упражнение сделано: со своим весом — по повторам, с железом — по весу
+const setDone = (n, e) => !!e && (bwEx(n) ? e.r > 0 : e.w > 0);
+const tonnageOf = (p, e) => p.s * (e.r || 0) * ((e.w || 0) + bodyLoad(p.n));
+
 // Максимум для планирования — только по прошлым тренировкам
 const planMax = name => Math.max(S.maxes[name] ?? 0,
   priorSets(name).reduce((m, s) => Math.max(m, e1rm(s.w, s.r)), 0));
@@ -410,7 +423,10 @@ function accessoryBase(p) {
 
 function plan(p) {
   const c = CATALOG[p.n], step = stepOf(p.n);
-  const raw = p.pmin ? planMax(p.n) * p.pmin : accessoryBase(p);
+  // Процент от максимума работает только у базовых, где максимум задан.
+  // У остальных первый записанный вес и становится плановым.
+  const byPct = p.pmin && BASE_LIFTS.includes(p.n) && planMax(p.n) > 0;
+  const raw = byPct ? planMax(p.n) * p.pmin : accessoryBase(p);
   if (!raw) return 0;
   return Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step);
 }
@@ -420,7 +436,7 @@ function firstUnfinished() {
     for (let w = 1; w <= 4; w++)
       for (const d of days(w)) {
         const rec = S.log[slot(c, w, d)];
-        const n = rec ? Object.values(rec.sets || {}).filter(x => x.w > 0).length : 0;
+        const n = rec ? Object.entries(rec.sets || {}).filter(([nm, x]) => setDone(nm, x)).length : 0;
         if (n < items(w, d).length) return {c, w, d};
       }
   return {c: 1, w: 1, d: DAYS[0]};
@@ -491,7 +507,7 @@ function kcalEx(p) {
 function kcalWorkout(list, rec) {
   const rate = restRate();
   if (!rate) return 0;
-  const done = list.filter(p => rec.sets[p.n]?.w > 0);
+  const done = list.filter(p => setDone(p.n, rec.sets[p.n]));
   if (!done.length) return 0;
   const model = done.reduce((s, p) => s + kcalEx(p), 0);
   const ts = done.map(p => rec.sets[p.n].t).filter(Boolean);
@@ -595,12 +611,13 @@ function renderWork() {
       warmList(list).map(x => '<li>' + x + '</li>').join('') + '</ul></div>' : '') +
     '</div>';
   for (const p of list) {
-    const pl = plan(p), e = rec.sets[p.n] || {};
-    const filled = e.w > 0;
-    if (filled) { done++; tonnage += p.s * (e.r || 0) * e.w; }
+    const pl = plan(p), e = rec.sets[p.n] || {}, bw = bwEx(p.n);
+    const filled = setDone(p.n, e);
+    if (filled) { done++; tonnage += tonnageOf(p, e); }
     const open = openInfo.has(p.n);
-    const cls = (!filled ? '' : (pl && e.w < pl ? ' low' : ' done')) + (open ? ' open' : '');
-    const mark = !filled ? '' : (pl && e.w < pl ? '↓' : '✓');
+    const low = filled && pl && (e.w || 0) < pl;
+    const cls = (!filled ? '' : (low ? ' low' : ' done')) + (open ? ' open' : '');
+    const mark = !filled ? '' : (low ? '↓' : '✓');
     const meta = p.s + ' × ' + p.r +
       (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
       ' · отдых ' + restOf(p);
@@ -613,9 +630,13 @@ function renderWork() {
       '<div class="meta">' + meta + '</div>' +
       (ws ? '<div class="warm">' + ws + '</div>' : '') +
       '<div class="fields">' +
-      '<div class="fld plan"><label>план, кг</label><div class="pv">' + (pl ? fmt(pl) : '—') + bump + '</div></div>' +
-      '<div class="fld"><label>вес, кг</label><input inputmode="decimal" placeholder="' +
-        (pl ? fmt(pl) : '—') + '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
+      '<div class="fld plan"><label>план, кг</label><div class="pv">' +
+        (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
+        bump + '</div></div>' +
+      '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
+        '<input inputmode="decimal" placeholder="' +
+        (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? 'своим' : '—')) +
+        '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
       '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
         '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
       '</div>' +
@@ -700,7 +721,7 @@ function renderProg() {
       const [, w, d] = k.split('|');
       for (const p of items(+w, d)) {
         const e = S.log[k].sets?.[p.n];
-        if (e && e.w > 0) t += p.s * (e.r || 0) * e.w;
+        if (setDone(p.n, e)) t += tonnageOf(p, e);
       }
     }
     return {k: c, v: t};
@@ -708,7 +729,7 @@ function renderProg() {
   document.getElementById('p-tonnage').innerHTML = bars(tn, 'кг');
 
   const recent = Object.entries(S.log)
-    .map(([k, v]) => ({k, v, n: Object.values(v.sets || {}).filter(x => x.w > 0).length}))
+    .map(([k, v]) => ({k, v, n: Object.entries(v.sets || {}).filter(([nm, x]) => setDone(nm, x)).length}))
     .filter(r => r.n).sort((a, b) => (b.v.date || '').localeCompare(a.v.date || '')).slice(0, 8);
   document.getElementById('p-recent').innerHTML = recent.length ? recent.map(r => {
     const [c, w, d] = r.k.split('|');
@@ -786,10 +807,10 @@ document.getElementById('st-file').onchange = ev => {
     try {
       const data = JSON.parse(r.result);
       // Загрузка копии заменяет состояние целиком, поэтому предупреждаем о потере истории
-      const have = Object.values(S.log).reduce((n, v) =>
-        n + Object.values(v.sets || {}).filter(x => x.w > 0).length, 0);
-      const bring = Object.values(data.log || {}).reduce((n, v) =>
-        n + Object.values(v.sets || {}).filter(x => x.w > 0).length, 0);
+      const countSets = log => Object.values(log || {}).reduce((n, v) =>
+        n + Object.entries(v.sets || {}).filter(([nm, x]) => setDone(nm, x)).length, 0);
+      const have = countSets(S.log);
+      const bring = countSets(data.log);
       if (have && !confirm('Сейчас в журнале записей: ' + have +
           '. Загрузка заменит их (в файле: ' + bring + '). Продолжить?')) return;
       S = Object.assign(BLANK(), data);
@@ -812,7 +833,7 @@ document.getElementById('st-reset').onclick = () => {
 const DAY_SHORT = {'Понедельник': 'Пн', 'Среда': 'Ср', 'Пятница': 'Пт'};
 function dayState(c, w, d) {
   const rec = S.log[slot(c, w, d)], total = items(w, d).length;
-  const n = rec ? Object.values(rec.sets || {}).filter(x => x.w > 0).length : 0;
+  const n = rec ? Object.entries(rec.sets || {}).filter(([nm, x]) => setDone(nm, x)).length : 0;
   return n === 0 ? '' : (n >= total ? 'full' : 'part');
 }
 function overviewHTML() {
