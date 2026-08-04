@@ -107,7 +107,9 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .fld input{width:100%;border:0;background:transparent;color:var(--ink);
   font-size:19px;font-weight:600;padding:0;outline:none;font-family:inherit}
 .fld input::placeholder{color:var(--muted);font-weight:400;opacity:.45}
-.fld.plan{background:transparent;border-style:dashed;cursor:pointer}
+.fld.plan{background:transparent;border-style:dashed;border-color:var(--a1);cursor:pointer}
+.fld.plan .pv{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.fld .edit{font-size:15px;font-weight:400;color:var(--a1);opacity:.75}
 .fld .pv{font-size:19px;font-weight:600;color:var(--a1);line-height:1.45}
 .fld .own{font-size:13px;font-weight:600;color:var(--muted)}
 
@@ -644,9 +646,9 @@ function renderWork() {
       '<div class="meta">' + meta + '</div>' +
       (ws ? '<div class="warm">' + ws + '</div>' : '') +
       '<div class="fields">' +
-      '<div class="fld plan" data-p="' + p.n + '"><label>план, кг ✎</label><div class="pv">' +
+      '<div class="fld plan" data-p="' + p.n + '"><label>план, кг</label><div class="pv">' +
         (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
-        bump + '</div></div>' +
+        bump + '<span class="edit">✎</span></div></div>' +
       '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
         '<input inputmode="decimal" placeholder="' +
         (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? 'своим' : '—')) +
