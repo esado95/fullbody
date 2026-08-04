@@ -421,12 +421,13 @@ function accessoryBase(p) {
   return base && accessoryBump(p) ? base + stepOf(p.n) : base;
 }
 
+// Процент от максимума работает только у базовых, где максимум задан.
+// У остальных первый записанный вес и становится плановым.
+const byPct = p => p.pmin && BASE_LIFTS.includes(p.n) && planMax(p.n) > 0;
+
 function plan(p) {
   const c = CATALOG[p.n], step = stepOf(p.n);
-  // Процент от максимума работает только у базовых, где максимум задан.
-  // У остальных первый записанный вес и становится плановым.
-  const byPct = p.pmin && BASE_LIFTS.includes(p.n) && planMax(p.n) > 0;
-  const raw = byPct ? planMax(p.n) * p.pmin : accessoryBase(p);
+  const raw = byPct(p) ? planMax(p.n) * p.pmin : accessoryBase(p);
   if (!raw) return 0;
   return Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step);
 }
@@ -623,7 +624,7 @@ function renderWork() {
       ' · отдых ' + restOf(p);
     // Подводка нужна только до первого рабочего подхода
     const ws = filled ? '' : warmupSets(p, pl);
-    const bump = pl && !p.pmin && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
+    const bump = pl && !byPct(p) && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
     html += '<div class="ex' + cls + '">' +
       '<div class="top" data-i="' + p.n + '"><div class="nm">' + p.n +
         ' <span class="ic">ⓘ</span></div><div class="mark">' + mark + '</div></div>' +
