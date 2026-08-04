@@ -376,7 +376,11 @@ function allSets(name) {
   let i = 0;
   for (const k in S.log) {
     const e = S.log[k].sets?.[name];
-    if (e && (e.w > 0 || e.r > 0)) out.push({...e, cycle: +k.split('|')[0], k, i});
+    if (e && (e.w > 0 || e.r > 0)) {
+      const [, w, d] = k.split('|');
+      const pr = (items(+w, d).find(x => x.n === name) || {}).r;
+      out.push({...e, cycle: +k.split('|')[0], k, i, pr});
+    }
     i++;
   }
   return out;
@@ -416,9 +420,14 @@ const planMax = name => Math.max(S.maxes[name] ?? 0,
 
 // Если план задан руками, всё, что было записано до этого, в расчёт не идёт —
 // иначе ошибочная запись держала бы план завышенным навсегда.
+// Сколько разных схем повторов у упражнения в программе
+const repSchemes = {};
+for (const x of PROGRAM) (repSchemes[x.n] = repSchemes[x.n] || new Set()).add(x.r);
+// Ключ ручного плана: упражнение плюс схема
+const psKey = p => p.n + '|' + p.r;
 const priorFor = p => {
-  const ov = S.planSet?.[p.n];
-  return priorSets(p.n).filter(x => !ov || (x.t || 0) > ov.t);
+  const ov = S.planSet?.[psKey(p)];
+  return priorSets(p.n).filter(x => x.pr === p.r && (!ov || (x.t || 0) > ov.t));
 };
 // Подсобка: сделал все повторы на своём лучшем весе — в следующий раз шаг вверх
 function accessoryBump(p) {
@@ -429,9 +438,10 @@ function accessoryBump(p) {
   return !!(last && last.w >= best && last.r >= p.r);
 }
 function accessoryBase(p) {
-  const ov = S.planSet?.[p.n];
+  const ov = S.planSet?.[psKey(p)];
   const best = priorFor(p).reduce((m, s) => Math.max(m, s.w), 0);
-  const base = ov ? Math.max(ov.v, best) : Math.max(best, S.lastWeights[p.n] ?? 0);
+  const seed = (repSchemes[p.n]?.size || 0) <= 1 ? (S.lastWeights[p.n] ?? 0) : 0;
+  const base = ov ? Math.max(ov.v, best) : Math.max(best, seed);
   return base && accessoryBump(p) ? base + stepOf(p.n) : base;
 }
 
@@ -684,7 +694,7 @@ function renderWork() {
       const num = parseFloat(String(v).replace(',', '.'));
       const val = isFinite(num) && num > 0 ? num : 0;
       S.planSet = S.planSet || {};
-      S.planSet[p.n] = {v: val, t: Date.now()};
+      S.planSet[psKey(p)] = {v: val, t: Date.now()};
       save(); renderWork();
       flash(val ? 'План: ' + fmt(val) + ' кг' : 'План сброшен');
     };
