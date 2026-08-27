@@ -237,7 +237,6 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="tot">
     <div><span>Тоннаж</span><b id="w-tonnage">—</b></div>
     <div><span>Выполнено</span><b id="w-count">—</b></div>
-    <div><span>Калории</span><b id="w-kcal">—</b></div>
   </div>
 </section>
 
@@ -518,7 +517,7 @@ const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
 const pct = v => Math.round(v * 100) + '%';
 
 // Отдых зависит от того, силовая это работа или объёмная.
-// Вторым числом — середина диапазона в минутах, для оценки калорий.
+// Вторым числом — середина диапазона отдыха в минутах, для оценки длительности тренировки.
 function restInfo(p) {
   if (CATALOG[p.n].grp === 'Пресс') return ['45–60 сек', .9];
   if (p.pmin) {
@@ -530,51 +529,7 @@ function restInfo(p) {
   return p.r <= 8 ? ['90 сек – 2 мин', 1.75] : ['60–90 сек', 1.25];
 }
 const restOf = p => restInfo(p)[0];
-
-// Оценка калорий по MET: тяжёлая база 6, свой вес 5, изоляция 4, пресс 3.
-// Поправка Byrne 2005: ккал/мин покоя берётся из личного БО, а не «средних» 3.5 мл/кг.
-// EPOC — дожиг после силовой, +7% к итогу.
-const EPOC = 1.07;
-const metOf = p => {
-  const c = CATALOG[p.n];
-  return p.pmin ? 6 : (c.grp === 'Пресс' ? 3 : (c.eq === 'Свой вес' ? 5 : 4));
-};
 const exMins = p => p.s * (.7 + restInfo(p)[1]);
-function restRate() {              // ккал в минуту в покое
-  const b = bmr();
-  if (b) return b / 1440;
-  const bw = S.profile?.w;
-  return bw ? 3.5 * bw / 200 : 0;
-}
-function kcalEx(p) {
-  const rate = restRate();
-  return rate ? Math.round(metOf(p) * rate * exMins(p) * EPOC / 5) * 5 : 0;
-}
-// Итог за тренировку: если записи шли по ходу занятия, берём реальную
-// длительность (первый ввод → последний), иначе сумму модельных оценок.
-function kcalWorkout(list, rec) {
-  const rate = restRate();
-  if (!rate) return 0;
-  const done = list.filter(p => setDone(p.n, rec.sets[p.n]));
-  if (!done.length) return 0;
-  const model = done.reduce((s, p) => s + kcalEx(p), 0);
-  // В span идут только метки того же календарного дня, что и сама тренировка:
-  // если пропущенное упражнение дозаписано спустя часы/дни, его метка иначе
-  // раздувает разброс до потолка (180 мин) и завышает калории в разы.
-  const ts = done.map(p => rec.sets[p.n].t)
-    .filter(t => t && new Date(t).toISOString().slice(0, 10) === rec.date);
-  if (ts.length < 2) return model;
-  const span = Math.min((Math.max(...ts) - Math.min(...ts)) / 60000, 180);
-  if (span < 15) return model;
-  const wsum = done.reduce((s, p) => s + exMins(p), 0);
-  const avgMet = done.reduce((s, p) => s + metOf(p) * exMins(p), 0) / wsum;
-  return Math.round(avgMet * rate * span * EPOC / 5) * 5;
-}
-function bmr() {
-  const {sex, age, h, w} = S.profile || {};
-  if (!age || !h || !w) return 0;
-  return Math.round(10 * w + 6.25 * h - 5 * age + (sex === 'ж' ? -161 : 5));
-}
 const openInfo = new Set();
 let warmOpen = false;
 
@@ -700,10 +655,6 @@ function renderWork() {
   document.getElementById('w-bar').style.width = (list.length ? done / list.length * 100 : 0) + '%';
   document.getElementById('w-tonnage').textContent = tonnage ? Math.round(tonnage).toLocaleString('ru-RU') + ' кг' : '—';
   document.getElementById('w-count').textContent = done + ' / ' + list.length;
-  const kcAll = list.reduce((s, p) => s + kcalEx(p), 0);
-  const kcDone = kcalWorkout(list, rec);
-  document.getElementById('w-kcal').textContent = !kcAll ? '—'
-    : (kcDone ? '≈' + kcDone : 'до ≈' + kcAll);
 
   for (const inp of document.querySelectorAll('#w-list input')) {
     inp.addEventListener('change', ev => {
