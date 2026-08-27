@@ -558,7 +558,11 @@ function kcalWorkout(list, rec) {
   const done = list.filter(p => setDone(p.n, rec.sets[p.n]));
   if (!done.length) return 0;
   const model = done.reduce((s, p) => s + kcalEx(p), 0);
-  const ts = done.map(p => rec.sets[p.n].t).filter(Boolean);
+  // В span идут только метки того же календарного дня, что и сама тренировка:
+  // если пропущенное упражнение дозаписано спустя часы/дни, его метка иначе
+  // раздувает разброс до потолка (180 мин) и завышает калории в разы.
+  const ts = done.map(p => rec.sets[p.n].t)
+    .filter(t => t && new Date(t).toISOString().slice(0, 10) === rec.date);
   if (ts.length < 2) return model;
   const span = Math.min((Math.max(...ts) - Math.min(...ts)) / 60000, 180);
   if (span < 15) return model;
