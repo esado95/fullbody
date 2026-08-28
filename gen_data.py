@@ -5,6 +5,7 @@
 starter-fullbody.json — файл с личными весами для загрузки в приложение.
 """
 import json
+import math
 import os
 
 # упражнение: [группа, оборудование, шаг веса кг, минимальный вес кг]
@@ -50,13 +51,21 @@ program = json.load(open("source/program.json", encoding="utf-8"))
 split_source = json.load(open("source/split.json", encoding="utf-8"))
 technique = json.load(open("source/technique.json", encoding="utf-8"))
 
-# У сплита недели одинаковые: прогресс задают фактические повторы и вес,
-# поэтому в исходнике день описан один раз, а здесь разворачивается на цикл.
+# Дни сплита описаны один раз. Для базы подставляется недельная волна,
+# а в разгрузочную неделю объём подсобки сокращается вдвое.
 split = []
 for week in range(1, split_source.get("weeks", 4) + 1):
     for day in split_source["days"]:
         for exercise in day["exercises"]:
-            split.append({"w": week, "d": day["d"], **exercise})
+            item = {"w": week, "d": day["d"], **exercise}
+            progression = split_source.get("baseProgression", {}).get(exercise["n"])
+            if progression:
+                assert len(progression) == split_source["weeks"], \
+                    "неполная прогрессия: " + exercise["n"]
+                item.update(progression[week - 1])
+            elif week == split_source.get("deloadWeek"):
+                item["s"] = max(1, math.ceil(item["s"] / 2))
+            split.append(item)
 
 missing = sorted({p["n"] for p in program + split} - set(CATALOG))
 assert not missing, "нет в справочнике: " + str(missing)

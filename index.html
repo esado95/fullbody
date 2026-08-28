@@ -360,7 +360,7 @@ svg.chart{width:100%;height:190px;display:block}
   <button data-s="s-set"><i>⚙</i>Настройки</button>
 </nav>
 
-<script src="data.js?v=8"></script>
+<script src="data.js?v=9"></script>
 <script>
 const KEY = 'fullbody.v1';
 const THEMES = [
@@ -399,6 +399,7 @@ applyTheme();
 
 const days = w => DAYS.filter(d => PROGRAM.some(p => p.w === w && p.d === d));
 const items = (w, d) => PROGRAM.filter(p => p.w === w && p.d === d);
+const weekCount = () => Math.max(...PROGRAM.map(p => p.w));
 const slot = (c, w, d) => c + '|' + w + '|' + d;
 const stepOf = n => S.steps[CATALOG[n].eq] ?? CATALOG[n].step;
 
@@ -517,7 +518,7 @@ function plan(p) {
 
 function firstUnfinished() {
   for (let c = 1; c <= 60; c++)
-    for (let w = 1; w <= 4; w++)
+    for (let w = 1; w <= weekCount(); w++)
       for (const d of days(w)) {
         const rec = S.log[slot(c, w, d)];
         const n = rec ? Object.entries(rec.sets || {}).filter(([nm, x]) => setDone(nm, x)).length : 0;
@@ -525,11 +526,11 @@ function firstUnfinished() {
       }
   return {c: 1, w: 1, d: DAYS[0]};
 }
-if (!S.cur) S.cur = firstUnfinished();
+if (!S.cur || !items(S.cur.w, S.cur.d).length) S.cur = firstUnfinished();
 
 function shift(dir) {
   const flat = [];
-  for (let w = 1; w <= 4; w++) for (const d of days(w)) flat.push({w, d});
+  for (let w = 1; w <= weekCount(); w++) for (const d of days(w)) flat.push({w, d});
   let i = flat.findIndex(x => x.w === S.cur.w && x.d === S.cur.d);
   i += dir;
   let c = S.cur.c;
@@ -817,7 +818,7 @@ function renderSet() {
   document.getElementById('st-programs').innerHTML = Object.entries(PROGRAM_META).map(([id, p]) =>
     '<button data-program="' + id + '"' + (id === S.program ? ' class="on"' : '') + '>' + p.name + '</button>').join('');
   document.getElementById('st-program-note').textContent = S.program === 'split'
-    ? 'Три тренировки по порядку. Дни недели можно менять — история Сплита хранится отдельно.'
+    ? 'Шесть недель: объём → сила → разгрузка. Дни можно менять — история Сплита хранится отдельно.'
     : 'Исходная четырёхнедельная программа. Её история и текущий цикл сохранены отдельно.';
   for (const b of document.querySelectorAll('#st-programs button')) b.onclick = () => switchProgram(b.dataset.program);
 
@@ -922,7 +923,7 @@ function overviewHTML() {
   let h = '';
   for (let c = 1; c <= maxC; c++) {
     h += '<h3>Цикл ' + c + '</h3>';
-    for (let w = 1; w <= 4; w++) {
+    for (let w = 1; w <= weekCount(); w++) {
       h += '<div class="wk"><span>Неделя ' + w + '</span>' + days(w).map(d => {
         const cur = S.cur.c === c && S.cur.w === w && S.cur.d === d;
         return '<button class="' + dayState(c, w, d) + (cur ? ' cur' : '') +
@@ -996,7 +997,7 @@ const plural = (n, one, few, many) => {
 // Следующая тренировка по порядку недель и дней
 function nextSlot() {
   const flat = [];
-  for (let ww = 1; ww <= 4; ww++) for (const dd of days(ww)) flat.push({w: ww, d: dd});
+  for (let ww = 1; ww <= weekCount(); ww++) for (const dd of days(ww)) flat.push({w: ww, d: dd});
   let i = flat.findIndex(x => x.w === S.cur.w && x.d === S.cur.d) + 1;
   return i >= flat.length ? {c: S.cur.c + 1, ...flat[0]} : {c: S.cur.c, ...flat[i]};
 }

@@ -1,6 +1,6 @@
 // Кэш приложения: работает офлайн, обновляется при смене VERSION
-const VERSION = 'fullbody-v34';
-const ASSETS = ['.', 'index.html', 'data.js?v=8', 'manifest.json', 'icon-180.png?v=2', 'icon-192.png?v=2', 'icon-512.png?v=2', 'icon-512-maskable.png'];
+const VERSION = 'fullbody-v35';
+const ASSETS = ['.', 'index.html', 'data.js?v=9', 'manifest.json', 'icon-180.png?v=2', 'icon-192.png?v=2', 'icon-512.png?v=2', 'icon-512-maskable.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
