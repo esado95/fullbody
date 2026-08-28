@@ -43,12 +43,13 @@ body{margin:0;background:var(--bg);color:var(--ink);
 /* Непрозрачная полоса под статусбаром: иначе контент проезжает под часами */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
   background:var(--bg);z-index:20}
-.wrap{max-width:520px;margin:0 auto;padding:0 16px 18px;height:calc(100dvh - env(safe-area-inset-top) - 64px - env(safe-area-inset-bottom));
-  overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px;height:calc(100dvh - env(safe-area-inset-top) - 64px - env(safe-area-inset-bottom));overflow:hidden}
 h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
-.screen{display:none}.screen.on{display:block}
-.work-head{position:sticky;top:0;z-index:16;background:var(--bg);padding-top:1px}
+.screen{display:none;height:100%;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}.screen.on{display:block}
+#s-work.on,#s-set.on{display:flex;flex-direction:column;overflow:hidden}
+.work-head,.settings-head{flex:0 0 auto;background:var(--bg);padding-top:1px;position:relative;z-index:16}
+.work-scroll,.settings-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding-bottom:18px}
 .work-head .stick{position:static;top:auto}
 
 .navbar{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:var(--r);
@@ -189,7 +190,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:15px 16px;margin-bottom:12px}
-.program-card{position:sticky;top:0;z-index:14;box-shadow:0 8px 14px var(--bg);margin-top:0}
+.program-card{box-shadow:0 8px 14px var(--bg);margin-top:0}
 .card h2{font-size:15px;font-weight:600;margin:0 0 12px}
 .card p.hint{font-size:12.5px;color:var(--muted);margin:-8px 0 12px}
 .programs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -263,10 +264,12 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="bar"><i id="w-bar" style="width:0"></i></div>
   </div>
   </div>
+  <div class="work-scroll">
   <div id="w-list"></div>
   <div class="tot">
     <div><span>Тоннаж</span><b id="w-tonnage">—</b></div>
     <div><span>Выполнено</span><b id="w-count">—</b></div>
+  </div>
   </div>
 </section>
 
@@ -294,6 +297,7 @@ svg.chart{width:100%;height:190px;display:block}
 </section>
 
 <section id="s-set" class="screen">
+  <div class="settings-head">
   <h1>Настройки</h1>
 
   <div class="card program-card">
@@ -301,7 +305,9 @@ svg.chart{width:100%;height:190px;display:block}
     <div class="programs" id="st-programs"></div>
     <p class="hint" id="st-program-note" style="margin:10px 0 0"></p>
   </div>
+  </div>
 
+  <div class="settings-scroll">
   <div class="card">
     <h2>После перерыва</h2>
     <div class="dl-val"><b id="dl-num">0</b><span>%</span></div>
@@ -352,6 +358,7 @@ svg.chart{width:100%;height:190px;display:block}
     <button class="btn" id="st-import">Загрузить копию</button>
     <button class="btn warn" id="st-reset">Стереть всю историю</button>
     <input type="file" id="st-file" accept=".json" hidden>
+  </div>
   </div>
 </section>
 
