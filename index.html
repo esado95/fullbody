@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fullbody</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json?v=2">
 <meta name="theme-color" content="#C1613F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -450,6 +450,16 @@ applyTheme();
 // не вмешиваясь в обычную прокрутку, барабаны и range-ползунок.
 for (const type of ['gesturestart', 'gesturechange', 'gestureend'])
   document.addEventListener(type, ev => ev.preventDefault(), {passive:false, capture:true});
+
+const lockPortrait = () => {
+  try {
+    const p = screen.orientation?.lock?.('portrait-primary');
+    if (p?.catch) p.catch(() => {});
+  } catch {}
+};
+lockPortrait();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) lockPortrait(); });
+document.addEventListener('pointerup', lockPortrait, {once:true});
 
 const days = w => DAYS.filter(d => PROGRAM.some(p => p.w === w && p.d === d));
 const items = (w, d) => PROGRAM.filter(p => p.w === w && p.d === d);
