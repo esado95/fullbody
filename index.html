@@ -168,6 +168,10 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
   padding:15px 16px;margin-bottom:12px}
 .card h2{font-size:15px;font-weight:600;margin:0 0 12px}
 .card p.hint{font-size:12.5px;color:var(--muted);margin:-8px 0 12px}
+.programs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.programs button{padding:11px 8px;border:1px solid var(--line);border-radius:11px;background:var(--card);
+  color:var(--muted);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.programs button.on{border-color:var(--a1);background:color-mix(in srgb,var(--a1) var(--tint),var(--card));color:var(--a1)}
 
 .dl-val{display:flex;align-items:baseline;justify-content:center;gap:3px;margin:4px 0 12px}
 .dl-val b{font-size:42px;font-weight:600;color:var(--a1);line-height:1;letter-spacing:-.03em}
@@ -267,6 +271,12 @@ svg.chart{width:100%;height:190px;display:block}
   <h1>Настройки</h1>
 
   <div class="card">
+    <h2>Программа</h2>
+    <div class="programs" id="st-programs"></div>
+    <p class="hint" id="st-program-note" style="margin:10px 0 0"></p>
+  </div>
+
+  <div class="card">
     <h2>После перерыва</h2>
     <div class="dl-val"><b id="dl-num">0</b><span>%</span></div>
     <input type="range" id="dl-range" min="0" max="40" step="1" value="0" aria-label="Снижение весов">
@@ -350,7 +360,7 @@ svg.chart{width:100%;height:190px;display:block}
   <button data-s="s-set"><i>⚙</i>Настройки</button>
 </nav>
 
-<script src="data.js?v=7"></script>
+<script src="data.js?v=8"></script>
 <script>
 const KEY = 'fullbody.v1';
 const THEMES = [
@@ -362,14 +372,24 @@ const THEMES = [
 // Функция, а не константа: иначе вложенные объекты делятся по ссылке
 // между состояниями и записи утекают в шаблон.
 const BLANK = () => ({maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null,
-  planSet:{}, autoPlan:true,
+  program:'fullbody', programStates:{}, planSet:{}, autoPlan:true,
   theme:'', sideOpen:true, profile:{sex:'м', age:0, h:0, w:0}});
 const load = () => {
   try { return Object.assign(BLANK(), JSON.parse(localStorage.getItem(KEY) || '{}')); }
   catch { return BLANK(); }
 };
 let S = load();
-const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const useProgramData = id => {
+  S.program = PROGRAMS[id] ? id : 'fullbody';
+  PROGRAM = PROGRAMS[S.program];
+  DAYS = [...new Set(PROGRAM.filter(p => p.w === 1).map(p => p.d))];
+};
+useProgramData(S.program);
+const save = () => {
+  S.programStates = S.programStates || {};
+  S.programStates[S.program] = {log:S.log || {}, cur:S.cur || null};
+  localStorage.setItem(KEY, JSON.stringify(S));
+};
 const applyTheme = () => {
   document.documentElement.dataset.theme = S.theme || '';
   const c = getComputedStyle(document.documentElement).getPropertyValue('--a1').trim();
@@ -435,8 +455,25 @@ const planMax = name => Math.max(S.maxes[name] ?? 0,
 // Если план задан руками, всё, что было записано до этого, в расчёт не идёт —
 // иначе ошибочная запись держала бы план завышенным навсегда.
 // Сколько разных схем повторов у упражнения в программе
-const repSchemes = {};
-for (const x of PROGRAM) (repSchemes[x.n] = repSchemes[x.n] || new Set()).add(x.r);
+let repSchemes = {};
+function rebuildRepSchemes() {
+  repSchemes = {};
+  for (const x of PROGRAM) (repSchemes[x.n] = repSchemes[x.n] || new Set()).add(x.r);
+}
+rebuildRepSchemes();
+function switchProgram(id) {
+  if (!PROGRAMS[id] || id === S.program) return;
+  S.programStates = S.programStates || {};
+  S.programStates[S.program] = {log:S.log || {}, cur:S.cur || null};
+  const next = S.programStates[id] || {log:{}, cur:null};
+  S.log = next.log || {};
+  S.cur = next.cur || null;
+  useProgramData(id);
+  rebuildRepSchemes();
+  if (!S.cur || !items(S.cur.w, S.cur.d).length) S.cur = firstUnfinished();
+  save(); renderWork(); renderProg(); renderSet();
+  flash('Выбрана программа: ' + PROGRAM_META[id].name);
+}
 // Ключ ручного плана: упражнение плюс схема
 const psKey = p => p.n + '|' + p.r;
 const priorFor = p => {
@@ -604,7 +641,7 @@ function detail(p) {
 
 function renderWork() {
   const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
-  document.getElementById('w-sub').textContent = 'Цикл ' + c + ' · неделя ' + w;
+  document.getElementById('w-sub').textContent = PROGRAM_META[S.program].short + ' · цикл ' + c + ' · неделя ' + w;
   document.getElementById('w-day').textContent = d;
   const di = days(w).indexOf(d) + 1;
   document.getElementById('w-pos').textContent = 'тренировка ' + di + ' из ' + days(w).length +
@@ -777,6 +814,13 @@ dlRange.addEventListener('input', () => {
 dlRange.addEventListener('change', save);
 
 function renderSet() {
+  document.getElementById('st-programs').innerHTML = Object.entries(PROGRAM_META).map(([id, p]) =>
+    '<button data-program="' + id + '"' + (id === S.program ? ' class="on"' : '') + '>' + p.name + '</button>').join('');
+  document.getElementById('st-program-note').textContent = S.program === 'split'
+    ? 'Три тренировки по порядку. Дни недели можно менять — история Сплита хранится отдельно.'
+    : 'Исходная четырёхнедельная программа. Её история и текущий цикл сохранены отдельно.';
+  for (const b of document.querySelectorAll('#st-programs button')) b.onclick = () => switchProgram(b.dataset.program);
+
   dlRange.value = Math.round(S.deload * 100);
   paintRange();
 
@@ -847,7 +891,9 @@ document.getElementById('st-file').onchange = ev => {
       if (have && !confirm('Сейчас в журнале записей: ' + have +
           '. Загрузка заменит их (в файле: ' + bring + '). Продолжить?')) return;
       S = Object.assign(BLANK(), data);
-      if (!S.cur) S.cur = firstUnfinished();
+      useProgramData(S.program);
+      rebuildRepSchemes();
+      if (!S.cur || !items(S.cur.w, S.cur.d).length) S.cur = firstUnfinished();
       save(); applyTheme(); renderWork(); renderProg(); renderSet();
       alert('Копия загружена');
     } catch { alert('Не получилось прочитать файл'); }
@@ -856,7 +902,7 @@ document.getElementById('st-file').onchange = ev => {
   r.readAsText(f);
 };
 document.getElementById('st-reset').onclick = () => {
-  if (!confirm('Стереть всю историю тренировок? Максимумы и настройки останутся. Это не отменить.')) return;
+  if (!confirm('Стереть историю программы «' + PROGRAM_META[S.program].name + '»? Максимумы и настройки останутся. Это не отменить.')) return;
   S.log = {};
   S.cur = firstUnfinished();
   save(); renderWork(); renderProg(); renderSet();
@@ -864,6 +910,7 @@ document.getElementById('st-reset').onclick = () => {
 
 // Обзор: сетка цикл → неделя → день, прыжок одним нажатием
 const DAY_SHORT = {'Понедельник': 'Пн', 'Среда': 'Ср', 'Пятница': 'Пт'};
+const dayShort = d => DAY_SHORT[d] || ('Т' + ((d.match(/\d+/) || ['?'])[0]));
 function dayState(c, w, d) {
   const rec = S.log[slot(c, w, d)], total = items(w, d).length;
   const n = rec ? Object.entries(rec.sets || {}).filter(([nm, x]) => setDone(nm, x)).length : 0;
@@ -879,7 +926,7 @@ function overviewHTML() {
       h += '<div class="wk"><span>Неделя ' + w + '</span>' + days(w).map(d => {
         const cur = S.cur.c === c && S.cur.w === w && S.cur.d === d;
         return '<button class="' + dayState(c, w, d) + (cur ? ' cur' : '') +
-          '" data-j="' + c + '|' + w + '|' + d + '">' + DAY_SHORT[d] + '</button>';
+          '" data-j="' + c + '|' + w + '|' + d + '">' + dayShort(d) + '</button>';
       }).join('') + '</div>';
     }
   }
@@ -933,7 +980,7 @@ const openGuide = new Set(['warm']);
 const GROUP_STRETCH = {
   'Ноги': 'квадрицепс и бицепс бедра', 'Спина': 'широчайшие и поясницу',
   'Грудь': 'грудные в дверном проёме', 'Плечи': 'дельты и грудной отдел',
-  'Бицепс': 'бицепс у стены', 'Трицепс': 'трицепс за головой', 'Пресс': 'пресс прогибом лёжа',
+  'Бицепс': 'бицепс у стены', 'Трицепс': 'трицепс за головой', 'Икры': 'икроножные у стены', 'Пресс': 'пресс прогибом лёжа',
 };
 const GROUP_WARM = {
   'Ноги': 'тазу и коленям',
@@ -1009,7 +1056,7 @@ function guideSections() {
   const nx = nextSlot(), nxList = items(nx.w, nx.d);
   const nxHeavy = nxList.filter(p => p.pmin).sort((a, b) => b.pmin - a.pmin)[0];
   const recovery = [
-    'Следующая тренировка — в ' + (nx.d === 'Среда' ? 'среду' : nx.d === 'Пятница' ? 'пятницу' : 'понедельник') +
+    'Следующая — ' + (DAY_SHORT[nx.d] ? (nx.d === 'Среда' ? 'в среду' : nx.d === 'Пятница' ? 'в пятницу' : 'в понедельник') : nx.d.toLowerCase()) +
       ', неделя ' + nx.w + (nx.c !== c ? ' нового цикла' : '') +
       (nxHeavy ? ', главным будет ' + nxHeavy.n.toLowerCase() + ' на ' + pct(nxHeavy.pmin) + '.' : '.'),
     'Недовосстановление считается, а не ощущается. Пульс покоя утром выше обычного на 5–10 ударов три дня подряд; хват слабее процентов на десять; разминочный вес идёт медленнее обычного на 10% и больше — последний маркер честнее двух первых. Один — шум. Два из трёх — тяжёлая сессия сегодня заберёт не день, а неделю-две.',
@@ -1032,7 +1079,7 @@ function guideSections() {
 
 function renderGuide() {
   const {c, w, d} = S.cur;
-  document.getElementById('g-sub').textContent = 'Под сегодняшнюю тренировку · цикл ' + c + ' · неделя ' + w + ' · ' + d.toLowerCase();
+  document.getElementById('g-sub').textContent = PROGRAM_META[S.program].short + ' · цикл ' + c + ' · неделя ' + w + ' · ' + d.toLowerCase();
   document.getElementById('g-list').innerHTML = guideSections().map(s => {
     const on = openGuide.has(s.id);
     return '<div class="card gsec' + (on ? ' open' : '') + '">' +

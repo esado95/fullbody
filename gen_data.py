@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Генерирует data.js из source/program.json.
+"""Генерирует data.js из программ Full Body и Сплит.
 
 Если рядом лежит personal.json (не коммитится), дополнительно собирает
 starter-fullbody.json — файл с личными весами для загрузки в приложение.
@@ -24,6 +24,11 @@ CATALOG = {
     "Подъем гантелей через стороны":              ["Плечи",   "Гантели",   1,   1],
     "Сведения в тренажере бабочка":               ["Грудь",   "Тренажёр",  5,   5],
     "Тяга вертикального блока (на широчайшие)":   ["Спина",   "Блок",      5,   5],
+    "Тяга горизонтального блока":                 ["Спина",   "Блок",      5,   5],
+    "Румынская тяга":                             ["Ноги",    "Штанга",    2.5, 20],
+    "Жим ногами":                                 ["Ноги",    "Тренажёр",  5,   5],
+    "Сгибание ног в тренажере":                   ["Ноги",    "Тренажёр",  5,   5],
+    "Подъемы на носки стоя":                      ["Икры",    "Тренажёр",  5,   5],
     "Жим к низу в блочном тренажере":             ["Трицепс", "Блок",      5,   5],
     "Французский жим штанги лежа":                ["Трицепс", "EZ-штанга", 2.5, 10],
     "Французский жим штанги стоя":                ["Трицепс", "EZ-штанга", 2.5, 10],
@@ -42,9 +47,18 @@ CATALOG = {
 BASE_LIFTS = ["Приседания со штангой", "Становая тяга", "Жим штанги лежа"]
 
 program = json.load(open("source/program.json", encoding="utf-8"))
+split_source = json.load(open("source/split.json", encoding="utf-8"))
 technique = json.load(open("source/technique.json", encoding="utf-8"))
 
-missing = sorted({p["n"] for p in program} - set(CATALOG))
+# У сплита недели одинаковые: прогресс задают фактические повторы и вес,
+# поэтому в исходнике день описан один раз, а здесь разворачивается на цикл.
+split = []
+for week in range(1, split_source.get("weeks", 4) + 1):
+    for day in split_source["days"]:
+        for exercise in day["exercises"]:
+            split.append({"w": week, "d": day["d"], **exercise})
+
+missing = sorted({p["n"] for p in program + split} - set(CATALOG))
 assert not missing, "нет в справочнике: " + str(missing)
 no_tech = sorted(set(CATALOG) - set(technique))
 assert not no_tech, "нет описания техники: " + str(no_tech)
@@ -53,13 +67,18 @@ catalog = {n: {"grp": c[0], "eq": c[1], "step": c[2], "min": c[3]} for n, c in C
 
 with open("data.js", "w", encoding="utf-8") as f:
     f.write("// Сгенерировано gen_data.py — не править вручную\n")
-    f.write("const PROGRAM = " + json.dumps(program, ensure_ascii=False, separators=(",", ":")) + ";\n")
+    f.write("const PROGRAMS = " + json.dumps({"fullbody": program, "split": split}, ensure_ascii=False, separators=(",", ":")) + ";\n")
+    f.write("const PROGRAM_META = " + json.dumps({
+        "fullbody": {"name": "Full Body", "short": "Full Body"},
+        "split": {"name": "Сплит", "short": "Сплит 3 дня"},
+    }, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const CATALOG = " + json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const INFO = " + json.dumps(technique, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const BASE_LIFTS = " + json.dumps(BASE_LIFTS, ensure_ascii=False) + ";\n")
-    f.write('const DAYS = ["Понедельник","Среда","Пятница"];\n')
+    f.write('let PROGRAM = PROGRAMS.fullbody;\n')
+    f.write('let DAYS = ["Понедельник","Среда","Пятница"];\n')
 
-print("упражнений в программе:", len(program), "| в справочнике:", len(catalog),
+print("упражнений Full Body:", len(program), "| Сплит:", len(split), "| в справочнике:", len(catalog),
       "| с описанием техники:", len(technique))
 
 if os.path.exists("personal.json"):
