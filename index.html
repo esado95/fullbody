@@ -250,9 +250,19 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .tabs button.on{color:var(--a1)}
 svg.chart{width:100%;height:190px;display:block}
 .empty{color:var(--muted);font-size:14px;text-align:center;padding:26px 10px}
+.rotate-lock{display:none}
+@media (orientation:landscape) and (max-height:600px) and (pointer:coarse){
+  .rotate-lock{display:flex;position:fixed;inset:0;z-index:1000;background:var(--bg);color:var(--ink);
+    align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:28px}
+  .rotate-lock i{font-style:normal;font-size:52px;line-height:1;margin-bottom:18px;color:var(--a1)}
+  .rotate-lock b{font-size:22px}.rotate-lock span{font-size:14px;color:var(--muted);margin-top:7px}
+}
 </style>
 </head>
 <body>
+<div class="rotate-lock" role="status" aria-live="polite">
+  <i>↻</i><b>Поверни телефон</b><span>Приложение работает в портретном режиме</span>
+</div>
 <div class="wrap">
 
 <section id="s-work" class="screen on">
