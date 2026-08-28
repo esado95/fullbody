@@ -135,7 +135,8 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .wheels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wheelbox{text-align:center;position:relative}.wheelbox>span{font-size:11px;color:var(--muted)}
 .wheel{position:relative;height:210px;overflow-y:auto;scroll-snap-type:y mandatory;border-radius:12px;padding:84px 0;scrollbar-width:none;
   background:linear-gradient(to bottom,transparent calc(50% - 21px),color-mix(in srgb,var(--a1) 9%,var(--bg)) calc(50% - 21px),color-mix(in srgb,var(--a1) 9%,var(--bg)) calc(50% + 21px),transparent calc(50% + 21px)),var(--bg);
-  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent)}
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);
+  -webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;touch-action:pan-y}
 .wheel::-webkit-scrollbar{display:none}.wheel button{display:block;width:100%;height:42px;scroll-snap-align:center;border:0;background:transparent;color:var(--muted);font:inherit;font-size:21px;cursor:pointer;transform-origin:center;will-change:transform,opacity}
 .wheel button.sel{color:var(--ink);font-size:25px;font-weight:700}
 .picker-delete{display:none;width:100%;margin-top:10px;padding:11px;border:0;background:transparent;color:var(--a1);font:inherit;font-weight:600;cursor:pointer}
@@ -768,17 +769,19 @@ const picker = document.getElementById('picker');
 const wheelWeight = document.getElementById('wheel-weight');
 const wheelReps = document.getElementById('wheel-reps');
 function wheelValues(el, values, selected) {
-  el.innerHTML = values.map(v => '<button data-v="' + v + '"' + (v === selected ? ' class="sel"' : '') + '>' + fmt(v) + '</button>').join('');
-  const centerOn = (b, smooth) => el.scrollTo({top:b.offsetTop - (el.clientHeight - b.offsetHeight) / 2, behavior:smooth ? 'smooth' : 'auto'});
+  const selectedIndex = values.reduce((best, v, i) => Math.abs(v - selected) < Math.abs(values[best] - selected) ? i : best, 0);
+  el.innerHTML = values.map((v, i) => '<button data-v="' + v + '"' + (i === selectedIndex ? ' class="sel"' : '') + '>' + fmt(v) + '</button>').join('');
+  pickState[el === wheelWeight ? 'w' : 'r'] = values[selectedIndex];
+  const centerOn = (b, smooth) => el.scrollTo({top:[...el.children].indexOf(b) * 42, behavior:smooth ? 'smooth' : 'auto'});
   const paint = () => {
-    const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
-    for (const b of el.children) {
-      const dist = (b.getBoundingClientRect().top + b.offsetHeight / 2 - mid) / b.offsetHeight;
+    const center = el.scrollTop / 42;
+    [...el.children].forEach((b, i) => {
+      const dist = i - center;
       const bend = Math.max(-68, Math.min(68, dist * 20));
       const scale = Math.max(.72, 1 - Math.abs(dist) * .085);
       b.style.transform = 'perspective(180px) rotateX(' + bend + 'deg) scale(' + scale + ')';
       b.style.opacity = Math.max(.22, 1 - Math.abs(dist) * .22);
-    }
+    });
   };
   const choose = b => {
     for (const x of el.children) x.classList.toggle('sel', x === b);
@@ -786,14 +789,14 @@ function wheelValues(el, values, selected) {
   };
   for (const b of el.children) b.onclick = () => { choose(b); centerOn(b, true); };
   requestAnimationFrame(() => { const b = el.querySelector('.sel') || el.children[0]; centerOn(b, false); paint(); });
-  let timer;
+  let timer, frame;
   el.onscroll = () => {
-    paint();
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; paint(); });
     clearTimeout(timer); timer = setTimeout(() => {
-      const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
-      const b = [...el.children].reduce((a, x) => Math.abs(x.getBoundingClientRect().top + x.offsetHeight / 2 - mid) < Math.abs(a.getBoundingClientRect().top + a.offsetHeight / 2 - mid) ? x : a);
-      choose(b); centerOn(b, true);
-    }, 90);
+      const i = Math.max(0, Math.min(el.children.length - 1, Math.round(el.scrollTop / 42)));
+      choose(el.children[i]); paint();
+      // CSS scroll-snap сам доводит значение до центра, не перебивая инерцию Safari.
+    }, 180);
   };
 }
 function openPicker(row) {
