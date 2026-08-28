@@ -72,6 +72,8 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .ex.done .mark{color:var(--a2)}.ex.low .mark{color:var(--a1)}
 .ex .meta{font-size:12.5px;color:var(--muted);margin:3px 0 11px}
 .ex .warm{font-size:12px;color:var(--muted);margin:-7px 0 10px;opacity:.85}
+.ex .blkline{font-size:11.5px;color:var(--muted);margin:10px 0 5px;letter-spacing:.01em}
+.ex .blkline:first-of-type{margin-top:0}
 .ex .top{cursor:pointer}
 .ex .ic{font-size:13px;color:var(--muted);opacity:.7;font-weight:400}
 .ex.open .ic{color:var(--a1);opacity:1}
@@ -360,7 +362,7 @@ svg.chart{width:100%;height:190px;display:block}
   <button data-s="s-set"><i>⚙</i>Настройки</button>
 </nav>
 
-<script src="data.js?v=10"></script>
+<script src="data.js?v=11"></script>
 <script>
 const KEY = 'fullbody.v1';
 const THEMES = [
@@ -411,10 +413,18 @@ function allSets(name) {
   let i = 0;
   for (const k in S.log) {
     const e = S.log[k].sets?.[name];
-    if (e && (e.w > 0 || e.r > 0)) {
+    if (e) {
       const [, w, d] = k.split('|');
-      const pr = (items(+w, d).find(x => x.n === name) || {}).r;
-      out.push({...e, cycle: +k.split('|')[0], k, i, pr});
+      const p = items(+w, d).find(x => x.n === name) || {};
+      // Блочная запись: три рабочих подхода 5/3/1 — три отдельных результата
+      if (e.b) {
+        e.b.forEach((x, bi) => {
+          if (x && (x.w > 0 || x.r > 0))
+            out.push({...x, cycle: +k.split('|')[0], k, i, pr: p.b?.[bi]?.r ?? p.r});
+        });
+      } else if (e.w > 0 || e.r > 0) {
+        out.push({...e, cycle: +k.split('|')[0], k, i, pr: p.r});
+      }
     }
     i++;
   }
@@ -445,9 +455,15 @@ const bodyLoad = n => {
   if (!bwEx(n) || !w) return 0;
   return CATALOG[n].grp === 'Пресс' ? w * .5 : w;
 };
-// Упражнение сделано: со своим весом — по повторам, с железом — по весу
-const setDone = (n, e) => !!e && (bwEx(n) ? e.r > 0 : e.w > 0);
-const tonnageOf = (p, e) => p.s * (e.r || 0) * ((e.w || 0) + bodyLoad(p.n));
+// Упражнение сделано: со своим весом — по повторам, с железом — по весу.
+// Блочное считается сделанным, только когда закрыты все рабочие подходы.
+const blockDone = (n, x) => !!x && (bwEx(n) ? x.r > 0 : x.w > 0);
+const setDone = (n, e) => !!e && (e.b
+  ? e.b.length > 0 && e.b.every(x => blockDone(n, x))
+  : blockDone(n, e));
+const tonnageOf = (p, e) => e && e.b
+  ? e.b.reduce((t, x) => t + (x ? (x.r || 0) * ((x.w || 0) + bodyLoad(p.n)) : 0), 0)
+  : p.s * (e.r || 0) * ((e.w || 0) + bodyLoad(p.n));
 
 // Максимум для планирования — только по прошлым тренировкам
 const planMax = name => Math.max(S.maxes[name] ?? 0,
@@ -505,15 +521,36 @@ function accessoryBase(p) {
   return base && accessoryBump(p) ? base + stepOf(p.n) : base;
 }
 
-// Процент от максимума работает только у базовых, где максимум задан.
-// У остальных первый записанный вес и становится плановым.
-const byPct = p => p.pmin && BASE_LIFTS.includes(p.n) && planMax(p.n) > 0;
+// Процент от максимума работает у базовых и у блочных движений 5/3/1,
+// где максимум задан. У остальных первый записанный вес и становится плановым.
+const byPct = p => p.pmin && (p.b || BASE_LIFTS.includes(p.n)) && planMax(p.n) > 0;
+
+// Движения, план которых считается от максимума, — им нужен ввод максимума и график
+const mainLifts = () => [...new Set([...BASE_LIFTS, ...PROGRAM.filter(x => x.b).map(x => x.n)])];
+const LIFT_SHORT = {
+  'Приседания со штангой': 'Присед', 'Становая тяга': 'Становая',
+  'Жим штанги лежа': 'Жим лёжа', 'Жим штанги стоя': 'Жим стоя',
+};
+const liftShort = n => LIFT_SHORT[n] || n.split(' ')[0];
+
+// 5/3/1 отсчитывает проценты не от разового максимума, а от рабочего — 90% разового.
+// Эти 10% запаса и позволяют закрывать последний подход с добором повторов.
+// Рабочий максимум растёт не от рекордов, а по расписанию: каждый цикл плюс
+// 5 кг на присед и тягу, 2.5 кг на жимы. Это и есть двигатель программы —
+// без прибавки веса стояли бы на месте, пока не выйдет новый разовый максимум.
+const cycleBump = p => (p.inc || 0) * ((S.cur?.c || 1) - 1);
+const trainMax = p => planMax(p.n) ? planMax(p.n) * (p.tm || 1) + cycleBump(p) : 0;
+
+const roundTo = (raw, p) => {
+  const c = CATALOG[p.n], step = stepOf(p.n);
+  return raw ? Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step) : 0;
+};
+// Плановый вес одного рабочего блока 5/3/1
+const blockPlan = (p, bi) => roundTo(trainMax(p) * p.b[bi].p, p);
 
 function plan(p) {
-  const c = CATALOG[p.n], step = stepOf(p.n);
-  const raw = byPct(p) ? planMax(p.n) * p.pmin : accessoryBase(p);
-  if (!raw) return 0;
-  return Math.max(c.min, Math.round(raw * (1 - S.deload) / step) * step);
+  if (p.b) return blockPlan(p, p.b.length - 1);
+  return roundTo(byPct(p) ? planMax(p.n) * p.pmin : accessoryBase(p), p);
 }
 
 function firstUnfinished() {
@@ -540,34 +577,60 @@ function shift(dir) {
   save(); renderWork();
 }
 
-function setVal(name, field, raw) {
+function setVal(name, field, raw, bi) {
   const k = slot(S.cur.c, S.cur.w, S.cur.d);
   S.log[k] = S.log[k] || {date: new Date().toISOString().slice(0, 10), sets: {}};
   const e = S.log[k].sets[name] = S.log[k].sets[name] || {w: 0, r: 0};
-  e[field] = parseFloat(String(raw).replace(',', '.')) || 0;
-  // Время первого ввода — по нему считается реальная длительность тренировки
-  if ((e.w || e.r) && !e.t) e.t = Date.now();
-  if (!e.w && !e.r) delete S.log[k].sets[name];
+  const v = parseFloat(String(raw).replace(',', '.')) || 0;
+  if (bi === undefined) {
+    e[field] = v;
+    // Время первого ввода — по нему считается реальная длительность тренировки
+    if ((e.w || e.r) && !e.t) e.t = Date.now();
+    if (!e.w && !e.r) delete S.log[k].sets[name];
+  } else {
+    const pr = items(S.cur.w, S.cur.d).find(x => x.n === name);
+    e.b = e.b || [];
+    while (e.b.length < pr.b.length) e.b.push(null);
+    const x = e.b[bi] = e.b[bi] || {w: 0, r: 0};
+    x[field] = v;
+    if ((x.w || x.r) && !x.t) x.t = Date.now();
+    if (!x.w && !x.r) e.b[bi] = null;
+    // Самый тяжёлый подход дублируется в корень записи: по нему читают
+    // экраны и резервные копии, сделанные до появления блоков
+    const top = e.b.filter(Boolean).reduce((a, y) => (!a || y.w > a.w ? y : a), null);
+    e.w = top ? top.w : 0;
+    e.r = top ? top.r : 0;
+    if (top) e.t = top.t;
+    if (!e.b.some(Boolean)) delete S.log[k].sets[name];
+  }
   save();
 }
 
 const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
+const plural = (n, one, few, many) => {
+  const a = Math.abs(n)% 100, b = a% 10;
+  return n + ' ' + (a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many);
+};
 const pct = v => Math.round(v * 100) + '%';
 
 // Отдых зависит от того, силовая это работа или объёмная.
 // Вторым числом — середина диапазона отдыха в минутах, для оценки длительности тренировки.
-function restInfo(p) {
+function restInfo(p, r) {
+  const rr = r ?? p.r;
   if (CATALOG[p.n].grp === 'Пресс') return ['45–60 сек', .9];
   if (p.pmin) {
-    if (p.r <= 4) return ['4–5 мин', 4.5];
-    if (p.r <= 6) return ['3–4 мин', 3.5];
-    if (p.r <= 8) return ['2–3 мин', 2.5];
+    if (rr <= 4) return ['4–5 мин', 4.5];
+    if (rr <= 6) return ['3–4 мин', 3.5];
+    if (rr <= 8) return ['2–3 мин', 2.5];
     return ['90 сек – 2 мин', 1.75];
   }
-  return p.r <= 8 ? ['90 сек – 2 мин', 1.75] : ['60–90 сек', 1.25];
+  return rr <= 8 ? ['90 сек – 2 мин', 1.75] : ['60–90 сек', 1.25];
 }
-const restOf = p => restInfo(p)[0];
-const exMins = p => p.s * (.7 + restInfo(p)[1]);
+const restOf = (p, r) => restInfo(p, r)[0];
+// У блочного движения повторы в подходах разные, значит и отдых считается по каждому
+const exMins = p => p.b
+  ? p.b.reduce((m, b) => m + .7 + restInfo(p, b.r)[1], 0)
+  : p.s * (.7 + restInfo(p)[1]);
 const openInfo = new Set();
 let warmOpen = false;
 
@@ -640,6 +703,25 @@ function detail(p) {
     (inf.video ? 'Видео: техника выполнения ↗' : 'Найти видео ↗') + '</a></div>';
 }
 
+// Одна строка ввода: план, вес, повторы. bi задан у блочного движения 5/3/1
+function fieldsRow(p, pl, e, bw, bi) {
+  const at = bi === undefined ? '' : ' data-b="' + bi + '"';
+  const bump = bi === undefined && pl && !byPct(p) && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
+  const ph = pl ? (bw ? '+' : '') + fmt(pl) : (bw ? 'своим' : '—');
+  const rp = bi === undefined ? p.r : p.b[bi].r;
+  return '<div class="fields">' +
+    '<div class="fld plan" data-p="' + p.n + '"><label>план, кг</label><div class="pv">' +
+      (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
+      bump + (byPct(p) ? '' : '<span class="edit">✎</span>') + '</div></div>' +
+    '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
+      '<input inputmode="decimal" placeholder="' + ph + '" value="' + (e.w || '') +
+      '" data-n="' + p.n + '" data-f="w"' + at + '></div>' +
+    '<div class="fld"><label>повторы</label>' +
+      '<input inputmode="numeric" placeholder="' + rp + '" value="' + (e.r || '') +
+      '" data-n="' + p.n + '" data-f="r"' + at + '></div>' +
+    '</div>';
+}
+
 function renderWork() {
   const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
   document.getElementById('w-sub').textContent = PROGRAM_META[S.program].short + ' · цикл ' + c + ' · неделя ' + w;
@@ -656,36 +738,43 @@ function renderWork() {
       warmList(list).map(x => '<li>' + x + '</li>').join('') + '</ul></div>' : '') +
     '</div>';
   for (const p of list) {
-    const pl = plan(p), e = rec.sets[p.n] || {}, bw = bwEx(p.n);
+    const e = rec.sets[p.n] || {}, bw = bwEx(p.n);
     const filled = setDone(p.n, e);
     if (filled) { done++; tonnage += tonnageOf(p, e); }
     const open = openInfo.has(p.n);
-    // Своим весом без отягощения — это не недобор, а обычная работа
-    const low = filled && pl && (bw ? (e.w > 0 && e.w < pl) : (e.w || 0) < pl);
+    let low, meta, ws, fields;
+    if (p.b) {
+      // 5/3/1: три рабочих подхода с разным весом, у каждого своя строка ввода
+      const eb = e.b || [], tm = trainMax(p);
+      low = p.b.some((b, i) => blockDone(p.n, eb[i]) && (eb[i].w || 0) < blockPlan(p, i));
+      meta = p.b.map(b => pct(b.p) + (b.amrap ? ' до отказа' : '')).join(' → ') +
+        (tm ? ' · рабочий максимум ' + fmt(Math.round(tm * 10) / 10) + ' кг' : ' от рабочего максимума');
+      // Подводка ведёт к весу первого рабочего подхода, дальше вес растёт сам
+      ws = filled ? '' : warmupSets(p, blockPlan(p, 0));
+      fields = p.b.map((b, i) =>
+        '<div class="blkline">Подход ' + (i + 1) + ' · ' +
+          (b.amrap ? b.r + ' и больше, до предела' : plural(b.r, 'повтор', 'повтора', 'повторов')) +
+          ' · отдых ' + restOf(p, b.r) + '</div>' +
+        fieldsRow(p, blockPlan(p, i), eb[i] || {}, bw, i)).join('');
+    } else {
+      const pl = plan(p);
+      // Своим весом без отягощения — это не недобор, а обычная работа
+      low = !!(filled && pl && (bw ? (e.w > 0 && e.w < pl) : (e.w || 0) < pl));
+      meta = p.s + ' × ' + p.r +
+        (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
+        ' · отдых ' + restOf(p);
+      // Подводка нужна только до первого рабочего подхода
+      ws = filled ? '' : warmupSets(p, pl);
+      fields = fieldsRow(p, pl, e, bw);
+    }
     const cls = (!filled ? '' : (low ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (low ? '↓' : '✓');
-    const meta = p.s + ' × ' + p.r +
-      (p.pmin ? ' · ' + pct(p.pmin) + '–' + pct(p.pmax) : '') +
-      ' · отдых ' + restOf(p);
-    // Подводка нужна только до первого рабочего подхода
-    const ws = filled ? '' : warmupSets(p, pl);
-    const bump = pl && !byPct(p) && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
     html += '<div class="ex' + cls + '">' +
       '<div class="top" data-i="' + p.n + '"><div class="nm">' + p.n +
         ' <span class="ic">ⓘ</span></div><div class="mark">' + mark + '</div></div>' +
       '<div class="meta">' + meta + '</div>' +
       (ws ? '<div class="warm">' + ws + '</div>' : '') +
-      '<div class="fields">' +
-      '<div class="fld plan" data-p="' + p.n + '"><label>план, кг</label><div class="pv">' +
-        (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
-        bump + '<span class="edit">✎</span></div></div>' +
-      '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
-        '<input inputmode="decimal" placeholder="' +
-        (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? 'своим' : '—')) +
-        '" value="' + (e.w || '') + '" data-n="' + p.n + '" data-f="w"></div>' +
-      '<div class="fld"><label>повторы</label><input inputmode="numeric" placeholder="' + p.r +
-        '" value="' + (e.r || '') + '" data-n="' + p.n + '" data-f="r"></div>' +
-      '</div>' +
+      fields +
       (open ? detail(p) : '') +
       '</div>';
   }
@@ -696,7 +785,9 @@ function renderWork() {
 
   for (const inp of document.querySelectorAll('#w-list input')) {
     inp.addEventListener('change', ev => {
-      setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value);
+      const bi = ev.target.dataset.b;
+      setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value,
+        bi === undefined ? undefined : +bi);
       renderWork();
     });
   }
@@ -764,13 +855,14 @@ function lineChart(series) {
 }
 
 function renderProg() {
-  document.getElementById('p-maxes').innerHTML = BASE_LIFTS.map(n =>
-    '<div><span>' + n.split(' ')[0] + '</span><b>' + (effMax(n) ? fmt(Math.round(effMax(n) * 10) / 10) : '—') + '</b></div>').join('');
+  const lifts = mainLifts();
+  document.getElementById('p-maxes').innerHTML = lifts.map(n =>
+    '<div><span>' + liftShort(n) + '</span><b>' + (effMax(n) ? fmt(Math.round(effMax(n) * 10) / 10) : '—') + '</b></div>').join('');
 
   const cycles = [...new Set(Object.keys(S.log).map(k => +k.split('|')[0]))].sort((a, b) => a - b);
-  const colors = ['var(--a1)', 'var(--a2)', 'var(--a3)'];
-  document.getElementById('p-chart').innerHTML = lineChart(BASE_LIFTS.map((n, i) => ({
-    label: n.split(' ').slice(0, 2).join(' '), color: colors[i],
+  const colors = ['var(--a1)', 'var(--a2)', 'var(--a3)', 'var(--muted)'];
+  document.getElementById('p-chart').innerHTML = lineChart(lifts.map((n, i) => ({
+    label: liftShort(n), color: colors[i % colors.length],
     pts: cycles.map(c => ({k: c, v: Math.round(bestE1RM(n, c) * 10) / 10}))
   })));
 
@@ -818,7 +910,7 @@ function renderSet() {
   document.getElementById('st-programs').innerHTML = Object.entries(PROGRAM_META).map(([id, p]) =>
     '<button data-program="' + id + '"' + (id === S.program ? ' class="on"' : '') + '>' + p.name + '</button>').join('');
   document.getElementById('st-program-note').textContent = S.program === 'split'
-    ? 'Шесть недель: объём → сила → разгрузка. Дни можно менять — история Сплита хранится отдельно.'
+    ? 'Классический 5/3/1: четыре недели, три рабочих подхода с разным весом, последний — до предела. Проценты считаются от рабочего максимума, это 90 % разового. Каждый новый цикл рабочий максимум растёт сам: плюс 5 кг на присед и тягу, 2,5 кг на жимы. История Сплита хранится отдельно.'
     : 'Исходная четырёхнедельная программа. Её история и текущий цикл сохранены отдельно.';
   for (const b of document.querySelectorAll('#st-programs button')) b.onclick = () => switchProgram(b.dataset.program);
 
@@ -842,7 +934,7 @@ function renderSet() {
   for (const b of document.querySelectorAll('#st-themes button'))
     b.onclick = () => { S.theme = b.dataset.t; save(); applyTheme(); renderSet(); renderWork(); };
 
-  document.getElementById('st-maxes').innerHTML = BASE_LIFTS.map(n => {
+  document.getElementById('st-maxes').innerHTML = mainLifts().map(n => {
     const best = bestE1RM(n);
     return '<div class="row"><div class="lab">' + n + '</div>' +
       '<div class="val">' + (best ? 'по записям ' + Math.round(best) : '') + '</div>' +
@@ -990,10 +1082,6 @@ const GROUP_WARM = {
   'Спина': 'пояснице и лопаткам',
 };
 // Склонение существительного при числе: 1 подход, 2 подхода, 5 подходов
-const plural = (n, one, few, many) => {
-  const a = Math.abs(n)% 100, b = a% 10;
-  return n + ' ' + (a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many);
-};
 // Следующая тренировка по порядку недель и дней
 function nextSlot() {
   const flat = [];
@@ -1001,6 +1089,11 @@ function nextSlot() {
   let i = flat.findIndex(x => x.w === S.cur.w && x.d === S.cur.d) + 1;
   return i >= flat.length ? {c: S.cur.c + 1, ...flat[0]} : {c: S.cur.c, ...flat[i]};
 }
+
+// «3 × 8» у обычного упражнения, «5 / 5 / 5+ по нарастающему весу» у блочного
+const schemeText = p => p.b
+  ? p.b.map(b => b.r + (b.amrap ? '+' : '')).join(' / ') + ' по нарастающему весу'
+  : p.s + ' × ' + p.r;
 
 function guideSections() {
   const {c, w, d} = S.cur, list = items(w, d);
@@ -1033,7 +1126,7 @@ function guideSections() {
       : top >= .7 ? 'День средней тяжести: ' + pct(top) + ' от максимума. Оставляй два повтора в запасе.'
       : top ? 'Лёгкий по весу день: ' + pct(top) + ' от максимума. Запас три-четыре повтора; десять в запасе — это уже не тренировка, а затянутая разминка.'
       : 'Сегодня работы по процентам нет — ориентируйся на свои прошлые веса.',
-    heavy ? 'Главное сегодня — ' + heavy.n.toLowerCase() + ', ' + heavy.s + ' × ' + heavy.r +
+    heavy ? 'Главное сегодня — ' + heavy.n.toLowerCase() + ', ' + schemeText(heavy) +
       '. Отдых ' + restOf(heavy) + ': к третьей минуте креатинфосфат восстановлен процентов на 85, за 90% выходит только к пятой. Полторы минуты на тяжёлом весе стоят одного-двух повторов в следующем подходе.' : '',
     'Подход заканчивается при потере скорости на 20–25% от первого повтора, а не при жжении. На пятёрках в 80% закисление вообще ничего не сообщает.',
     'Ощущение врёт в одну сторону: остаток повторов недооценивают в среднем на один, на средних весах — на два. Подход обычно бросают раньше запланированного запаса, а не позже.',

@@ -23,12 +23,14 @@ CATALOG = {
     "Разведение гантелей лежа":                   ["Грудь",   "Гантели",   2,   2],
     "Разведение рук с гантелями стоя":            ["Плечи",   "Гантели",   1,   1],
     "Подъем гантелей через стороны":              ["Плечи",   "Гантели",   1,   1],
+    "Разведение рук в наклоне на заднюю дельту":   ["Плечи",   "Гантели",   1,   1],
     "Сведения в тренажере бабочка":               ["Грудь",   "Тренажёр",  5,   5],
     "Тяга вертикального блока (на широчайшие)":   ["Спина",   "Блок",      5,   5],
     "Тяга горизонтального блока":                 ["Спина",   "Блок",      5,   5],
     "Румынская тяга":                             ["Ноги",    "Штанга",    2.5, 20],
     "Жим ногами":                                 ["Ноги",    "Тренажёр",  5,   5],
     "Сгибание ног в тренажере":                   ["Ноги",    "Тренажёр",  5,   5],
+    "Выпады с гантелями":                          ["Ноги",    "Гантели",   2,   2],
     "Подъемы на носки стоя":                      ["Икры",    "Тренажёр",  5,   5],
     "Жим к низу в блочном тренажере":             ["Трицепс", "Блок",      5,   5],
     "Французский жим штанги лежа":                ["Трицепс", "EZ-штанга", 2.5, 10],
@@ -51,20 +53,32 @@ program = json.load(open("source/program.json", encoding="utf-8"))
 split_source = json.load(open("source/split.json", encoding="utf-8"))
 technique = json.load(open("source/technique.json", encoding="utf-8"))
 
-# Дни сплита описаны один раз. Для базы подставляется недельная волна,
-# а в разгрузочную неделю объём подсобки сокращается вдвое.
+# Дни сплита описаны один раз, волна 5/3/1 подставляется по номеру недели.
+# Главные движения идут блоками: три рабочих подхода с разным весом,
+# проценты в блоках отсчитываются от рабочего максимума (90% разового), а не от разового.
+TM = split_source.get("trainingMax", 0.90)
+waves = split_source["waves"]
+assert len(waves) == split_source["weeks"], "волн меньше, чем недель"
+
 split = []
-for week in range(1, split_source.get("weeks", 4) + 1):
+for week in range(1, split_source["weeks"] + 1):
     for day in split_source["days"]:
         for exercise in day["exercises"]:
-            item = {"w": week, "d": day["d"], **exercise}
-            progression = split_source.get("baseProgression", {}).get(exercise["n"])
-            if progression:
-                assert len(progression) == split_source["weeks"], \
-                    "неполная прогрессия: " + exercise["n"]
-                item.update(progression[week - 1])
-            elif week == split_source.get("deloadWeek"):
-                item["s"] = max(1, math.ceil(item["s"] / 2))
+            item = {"w": week, "d": day["d"], "n": exercise["n"]}
+            if exercise.get("main"):
+                blocks = waves[week - 1]
+                top = max(b["p"] for b in blocks)
+                # pmin/pmax остаются долей разового максимума: их читают гид,
+                # расчёт отдыха и признак работы по процентам.
+                item.update({"s": len(blocks), "r": blocks[-1]["r"], "b": blocks,
+                             "tm": TM, "inc": split_source["increment"][exercise["n"]],
+                             "pmin": round(TM * top, 4), "pmax": round(TM * top, 4)})
+            else:
+                item.update({k: v for k, v in exercise.items() if k != "n"})
+                item.setdefault("pmin", None)
+                item.setdefault("pmax", None)
+                if week == split_source.get("deloadWeek"):
+                    item["s"] = max(1, math.ceil(item["s"] / 2))
             split.append(item)
 
 missing = sorted({p["n"] for p in program + split} - set(CATALOG))
@@ -79,7 +93,7 @@ with open("data.js", "w", encoding="utf-8") as f:
     f.write("const PROGRAMS = " + json.dumps({"fullbody": program, "split": split}, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const PROGRAM_META = " + json.dumps({
         "fullbody": {"name": "Full Body", "short": "Full Body"},
-        "split": {"name": "Сплит", "short": "Сплит 3 дня"},
+        "split": {"name": "Сплит 5/3/1", "short": "5/3/1 · 3 дня"},
     }, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const CATALOG = " + json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + ";\n")
     f.write("const INFO = " + json.dumps(technique, ensure_ascii=False, separators=(",", ":")) + ";\n")
