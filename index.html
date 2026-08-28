@@ -36,11 +36,11 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 button,a{touch-action:manipulation}
-html{height:100%;overflow:hidden}
+html{height:100%;overflow:hidden;touch-action:manipulation}
 body{margin:0;background:var(--bg);color:var(--ink);
   font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   padding-top:env(safe-area-inset-top);
-  height:100%;overflow:hidden;overscroll-behavior:none}
+  height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
 /* Непрозрачная полоса под статусбаром: иначе контент проезжает под часами */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
   background:var(--bg);z-index:20}
@@ -444,6 +444,11 @@ const applyTheme = () => {
   document.querySelector('meta[name=theme-color]').content = c || '#C1613F';
 };
 applyTheme();
+
+// iOS иногда игнорирует user-scalable=no. Блокируем pinch-жест глобально,
+// не вмешиваясь в обычную прокрутку, барабаны и range-ползунок.
+for (const type of ['gesturestart', 'gesturechange', 'gestureend'])
+  document.addEventListener(type, ev => ev.preventDefault(), {passive:false});
 
 const days = w => DAYS.filter(d => PROGRAM.some(p => p.w === w && p.d === d));
 const items = (w, d) => PROGRAM.filter(p => p.w === w && p.d === d);
