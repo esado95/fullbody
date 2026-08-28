@@ -828,6 +828,21 @@ document.getElementById('picker-delete').onclick = () => {
   closePicker(); renderWork(); flash('Выполнение отменено');
 };
 
+// Safari в установленном PWA иногда сохраняет scrollLeft даже при overflow-x:hidden.
+// Центральные области должны реагировать только на вертикальный жест.
+for (const el of document.querySelectorAll('.work-scroll,.settings-scroll')) {
+  let sx = 0, sy = 0;
+  el.addEventListener('touchstart', ev => {
+    const t = ev.touches[0]; sx = t.clientX; sy = t.clientY; el.scrollLeft = 0;
+  }, {passive:true});
+  el.addEventListener('touchmove', ev => {
+    const t = ev.touches[0], dx = Math.abs(t.clientX - sx), dy = Math.abs(t.clientY - sy);
+    if (dx > dy && dx > 4) ev.preventDefault();
+    if (el.scrollLeft) el.scrollLeft = 0;
+  }, {passive:false});
+  el.addEventListener('scroll', () => { if (el.scrollLeft) el.scrollLeft = 0; }, {passive:true});
+}
+
 function renderWork() {
   const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
   document.getElementById('w-sub').textContent = PROGRAM_META[S.program].short + ' · цикл ' + c + ' · неделя ' + w;
