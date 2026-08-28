@@ -308,7 +308,6 @@ svg.chart{width:100%;height:190px;display:block}
   <div class="card program-card">
     <h2>Программа</h2>
     <div class="programs" id="st-programs"></div>
-    <p class="hint" id="st-program-note" style="margin:10px 0 0"></p>
   </div>
   </div>
 
@@ -324,7 +323,6 @@ svg.chart{width:100%;height:190px;display:block}
     <h2>Планы</h2>
     <div class="row"><div class="lab">Менять план автоматически</div>
       <label class="sw"><input type="checkbox" id="st-auto"><span></span></label></div>
-    <p class="hint" id="st-auto-note" style="margin:10px 0 0"></p>
   </div>
 
   <div class="card">
@@ -1018,9 +1016,6 @@ dlRange.addEventListener('change', save);
 function renderSet() {
   document.getElementById('st-programs').innerHTML = Object.entries(PROGRAM_META).map(([id, p]) =>
     '<button data-program="' + id + '"' + (id === S.program ? ' class="on"' : '') + '>' + p.name + '</button>').join('');
-  document.getElementById('st-program-note').textContent = S.program === 'split'
-    ? '5/3/1: четыре недели, три рабочих подхода с разным весом, последний — с запасом 1–2 качественных повтора. Проценты считаются от рабочего максимума, это 90 % разового. Каждый новый цикл рабочий максимум растёт сам: плюс 5 кг на присед и тягу, 2,5 кг на жимы. История Сплита хранится отдельно.'
-    : 'Исходная четырёхнедельная программа. Её история и текущий цикл сохранены отдельно.';
   for (const b of document.querySelectorAll('#st-programs button')) b.onclick = () => switchProgram(b.dataset.program);
 
   dlRange.value = Math.round(S.deload * 100);
@@ -1028,10 +1023,6 @@ function renderSet() {
 
   const auto = S.autoPlan !== false;
   document.getElementById('st-auto').checked = auto;
-  document.getElementById('st-auto-note').textContent = auto
-    ? 'Приложение подставляет в план твой рабочий вес и прибавляет шаг, когда все повторы закрыты.'
-    : 'Планы стоят на месте. Меняются только вручную — нажатием на блок плана в карточке.';
-
   if (!S.profile) S.profile = {sex: 'м', age: 0, h: 0, w: 0};
   document.getElementById('pf-sex').value = S.profile.sex || 'м';
   for (const [id, key] of [['pf-age', 'age'], ['pf-h', 'h'], ['pf-w', 'w']])
