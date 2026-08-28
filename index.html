@@ -35,14 +35,16 @@
     --a1:#FF7A4D; --a2:#9A9DA5; --a3:#6E7178; --input:#212124; --input-line:#3A3A3F}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;overflow:hidden}
 body{margin:0;background:var(--bg);color:var(--ink);
   font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   padding-top:env(safe-area-inset-top);
-  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  height:100%;overflow:hidden;overscroll-behavior:none}
 /* Непрозрачная полоса под статусбаром: иначе контент проезжает под часами */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
   background:var(--bg);z-index:20}
-.wrap{max-width:520px;margin:0 auto;padding:0 16px}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px 18px;height:calc(100dvh - env(safe-area-inset-top) - 64px - env(safe-area-inset-bottom));
+  overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
 h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
 .screen{display:none}.screen.on{display:block}
@@ -57,7 +59,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .navbar .mid span{display:block;font-size:12.5px;color:var(--muted)}
 
 /* Навигация по дням не уезжает при прокрутке — видно, где ты находишься */
-.stick{position:sticky;top:env(safe-area-inset-top);z-index:15;background:var(--bg);
+.stick{position:sticky;top:0;z-index:15;background:var(--bg);
   padding-top:6px;margin-bottom:2px}
 .bar{height:5px;background:var(--line);border-radius:5px;overflow:hidden;margin:0 0 14px}
 .bar>i{display:block;height:100%;background:var(--a1);border-radius:5px;transition:width .25s}
@@ -121,12 +123,14 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .setrow.saved .pickval{background:color-mix(in srgb,var(--a2) var(--tint),var(--card));border-color:var(--a2)}
 .setrow.saved .setok{background:var(--a2);border-color:var(--a2);color:white}
 .picker{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.42);display:none;align-items:flex-end}
-.picker.on{display:flex}.picker-sheet{width:100%;background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 35px rgba(0,0,0,.16)}
+.picker.on{display:flex}.picker-sheet{width:100%;max-height:calc(100dvh - env(safe-area-inset-top));overflow:hidden;background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 35px rgba(0,0,0,.16)}
 .picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .picker-head b{font-size:16px}.picker-head button{border:0;background:transparent;color:var(--a1);font:inherit;font-weight:700;padding:9px;cursor:pointer}
-.wheels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wheelbox{text-align:center}.wheelbox>span{font-size:11px;color:var(--muted)}
-.wheel{height:210px;overflow-y:auto;scroll-snap-type:y mandatory;border-radius:12px;background:var(--bg);padding:84px 0;scrollbar-width:none}
-.wheel::-webkit-scrollbar{display:none}.wheel button{display:block;width:100%;height:42px;scroll-snap-align:center;border:0;background:transparent;color:var(--muted);font:inherit;font-size:20px;cursor:pointer}
+.wheels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wheelbox{text-align:center;position:relative}.wheelbox>span{font-size:11px;color:var(--muted)}
+.wheel{position:relative;height:210px;overflow-y:auto;scroll-snap-type:y mandatory;border-radius:12px;padding:84px 0;scrollbar-width:none;
+  background:linear-gradient(to bottom,transparent calc(50% - 21px),color-mix(in srgb,var(--a1) 9%,var(--bg)) calc(50% - 21px),color-mix(in srgb,var(--a1) 9%,var(--bg)) calc(50% + 21px),transparent calc(50% + 21px)),var(--bg);
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent)}
+.wheel::-webkit-scrollbar{display:none}.wheel button{display:block;width:100%;height:42px;scroll-snap-align:center;border:0;background:transparent;color:var(--muted);font:inherit;font-size:21px;cursor:pointer;transform-origin:center;will-change:transform,opacity}
 .wheel button.sel{color:var(--ink);font-size:25px;font-weight:700}
 .picker-delete{display:none;width:100%;margin-top:10px;padding:11px;border:0;background:transparent;color:var(--a1);font:inherit;font-weight:600;cursor:pointer}
 
@@ -750,18 +754,30 @@ const wheelWeight = document.getElementById('wheel-weight');
 const wheelReps = document.getElementById('wheel-reps');
 function wheelValues(el, values, selected) {
   el.innerHTML = values.map(v => '<button data-v="' + v + '"' + (v === selected ? ' class="sel"' : '') + '>' + fmt(v) + '</button>').join('');
+  const centerOn = (b, smooth) => el.scrollTo({top:b.offsetTop - (el.clientHeight - b.offsetHeight) / 2, behavior:smooth ? 'smooth' : 'auto'});
+  const paint = () => {
+    const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
+    for (const b of el.children) {
+      const dist = (b.getBoundingClientRect().top + b.offsetHeight / 2 - mid) / b.offsetHeight;
+      const bend = Math.max(-68, Math.min(68, dist * 20));
+      const scale = Math.max(.72, 1 - Math.abs(dist) * .085);
+      b.style.transform = 'perspective(180px) rotateX(' + bend + 'deg) scale(' + scale + ')';
+      b.style.opacity = Math.max(.22, 1 - Math.abs(dist) * .22);
+    }
+  };
   const choose = b => {
     for (const x of el.children) x.classList.toggle('sel', x === b);
     pickState[el === wheelWeight ? 'w' : 'r'] = +b.dataset.v;
   };
-  for (const b of el.children) b.onclick = () => { choose(b); b.scrollIntoView({block:'center', behavior:'smooth'}); };
-  requestAnimationFrame(() => el.querySelector('.sel')?.scrollIntoView({block:'center'}));
+  for (const b of el.children) b.onclick = () => { choose(b); centerOn(b, true); };
+  requestAnimationFrame(() => { const b = el.querySelector('.sel') || el.children[0]; centerOn(b, false); paint(); });
   let timer;
   el.onscroll = () => {
+    paint();
     clearTimeout(timer); timer = setTimeout(() => {
       const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
       const b = [...el.children].reduce((a, x) => Math.abs(x.getBoundingClientRect().top + x.offsetHeight / 2 - mid) < Math.abs(a.getBoundingClientRect().top + a.offsetHeight / 2 - mid) ? x : a);
-      choose(b); b.scrollIntoView({block:'center', behavior:'smooth'});
+      choose(b); centerOn(b, true);
     }, 90);
   };
 }
