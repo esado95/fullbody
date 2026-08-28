@@ -114,6 +114,21 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .fld .edit{font-size:15px;font-weight:400;color:var(--a1);opacity:.75}
 .fld .pv{font-size:19px;font-weight:600;color:var(--a1);line-height:1.45}
 .fld .own{font-size:13px;font-weight:600;color:var(--muted)}
+.setrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:stretch;margin:7px 0}
+.pickval,.setok{border:1px solid var(--input-line);border-radius:11px;background:var(--input);color:var(--ink);font:inherit;cursor:pointer;min-height:52px}
+.pickval{text-align:left;padding:6px 10px}.pickval small{display:block;color:var(--muted);font-size:10.5px}
+.pickval b{display:block;font-size:18px;line-height:1.35}.setok{padding:0 13px;font-weight:700;color:var(--a1)}
+.setrow.saved .pickval{background:color-mix(in srgb,var(--a2) var(--tint),var(--card));border-color:var(--a2)}
+.setrow.saved .setok{background:var(--a2);border-color:var(--a2);color:white}
+.picker{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.42);display:none;align-items:flex-end}
+.picker.on{display:flex}.picker-sheet{width:100%;background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 35px rgba(0,0,0,.16)}
+.picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.picker-head b{font-size:16px}.picker-head button{border:0;background:transparent;color:var(--a1);font:inherit;font-weight:700;padding:9px;cursor:pointer}
+.wheels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wheelbox{text-align:center}.wheelbox>span{font-size:11px;color:var(--muted)}
+.wheel{height:210px;overflow-y:auto;scroll-snap-type:y mandatory;border-radius:12px;background:var(--bg);padding:84px 0;scrollbar-width:none}
+.wheel::-webkit-scrollbar{display:none}.wheel button{display:block;width:100%;height:42px;scroll-snap-align:center;border:0;background:transparent;color:var(--muted);font:inherit;font-size:20px;cursor:pointer}
+.wheel button.sel{color:var(--ink);font-size:25px;font-weight:700}
+.picker-delete{display:none;width:100%;margin-top:10px;padding:11px;border:0;background:transparent;color:var(--a1);font:inherit;font-weight:600;cursor:pointer}
 
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:none;align-items:flex-end}
 .ov.on{display:flex}
@@ -355,6 +370,17 @@ svg.chart{width:100%;height:190px;display:block}
 
 <div class="toast" id="toast"></div>
 
+<div class="picker" id="picker" aria-hidden="true">
+  <div class="picker-sheet">
+    <div class="picker-head"><button id="picker-cancel">Отмена</button><b id="picker-title">Результат подхода</b><button id="picker-save">Готово</button></div>
+    <div class="wheels">
+      <div class="wheelbox"><span>ВЕС, КГ</span><div class="wheel" id="wheel-weight"></div></div>
+      <div class="wheelbox"><span>ПОВТОРЫ</span><div class="wheel" id="wheel-reps"></div></div>
+    </div>
+    <button class="picker-delete" id="picker-delete">Отменить выполнение подхода</button>
+  </div>
+</div>
+
 <nav class="tabs">
   <button data-s="s-work" class="on"><i>▦</i>Тренировка</button>
   <button data-s="s-guide"><i>◈</i>Гид</button>
@@ -374,7 +400,7 @@ const THEMES = [
 // Функция, а не константа: иначе вложенные объекты делятся по ссылке
 // между состояниями и записи утекают в шаблон.
 const BLANK = () => ({maxes:{}, lastWeights:{}, deload:.20, steps:{}, log:{}, cur:null,
-  program:'fullbody', programStates:{}, planSet:{}, autoPlan:true,
+  program:'fullbody', programStates:{}, planSet:{}, tmBase:{}, autoPlan:true,
   theme:'', sideOpen:true, profile:{sex:'м', age:0, h:0, w:0}});
 const load = () => {
   try { return Object.assign(BLANK(), JSON.parse(localStorage.getItem(KEY) || '{}')); }
@@ -539,7 +565,9 @@ const liftShort = n => LIFT_SHORT[n] || n.split(' ')[0];
 // 5 кг на присед и тягу, 2.5 кг на жимы. Это и есть двигатель программы —
 // без прибавки веса стояли бы на месте, пока не выйдет новый разовый максимум.
 const cycleBump = p => (p.inc || 0) * ((S.cur?.c || 1) - 1);
-const trainMax = p => planMax(p.n) ? planMax(p.n) * (p.tm || 1) + cycleBump(p) : 0;
+// Рекорд AMRAP виден в прогрессе, но не создаёт вторую прибавку поверх шага цикла.
+const tmBaseMax = p => S.tmBase?.[p.n] || S.maxes[p.n] || 0;
+const trainMax = p => tmBaseMax(p) ? tmBaseMax(p) * (p.tm || 1) + cycleBump(p) : 0;
 
 const roundTo = (raw, p) => {
   const c = CATALOG[p.n], step = stepOf(p.n);
@@ -590,7 +618,8 @@ function setVal(name, field, raw, bi) {
   } else {
     const pr = items(S.cur.w, S.cur.d).find(x => x.n === name);
     e.b = e.b || [];
-    while (e.b.length < pr.b.length) e.b.push(null);
+    const count = pr.b?.length || pr.s;
+    while (e.b.length < count) e.b.push(null);
     const x = e.b[bi] = e.b[bi] || {w: 0, r: 0};
     x[field] = v;
     if ((x.w || x.r) && !x.t) x.t = Date.now();
@@ -703,24 +732,70 @@ function detail(p) {
     (inf.video ? 'Видео: техника выполнения ↗' : 'Найти видео ↗') + '</a></div>';
 }
 
-// Одна строка ввода: план, вес, повторы. bi задан у блочного движения 5/3/1
-function fieldsRow(p, pl, e, bw, bi) {
-  const at = bi === undefined ? '' : ' data-b="' + bi + '"';
-  const bump = bi === undefined && pl && !byPct(p) && accessoryBump(p) ? ' <span class="up">↑</span>' : '';
-  const ph = pl ? (bw ? '+' : '') + fmt(pl) : (bw ? 'своим' : '—');
-  const rp = bi === undefined ? p.r : p.b[bi].r;
-  return '<div class="fields">' +
-    '<div class="fld plan" data-p="' + p.n + '"><label>план, кг</label><div class="pv">' +
-      (pl ? (bw ? '+' : '') + fmt(pl) : (bw ? '<span class="own">свой вес</span>' : '—')) +
-      bump + (byPct(p) ? '' : '<span class="edit">✎</span>') + '</div></div>' +
-    '<div class="fld"><label>' + (bw ? '+ вес, кг' : 'вес, кг') + '</label>' +
-      '<input inputmode="decimal" placeholder="' + ph + '" value="' + (e.w || '') +
-      '" data-n="' + p.n + '" data-f="w"' + at + '></div>' +
-    '<div class="fld"><label>повторы</label>' +
-      '<input inputmode="numeric" placeholder="' + rp + '" value="' + (e.r || '') +
-      '" data-n="' + p.n + '" data-f="r"' + at + '></div>' +
-    '</div>';
+// Одно касание по «Готово» пишет план. Вес или повторы открывают барабаны.
+function fieldsRow(p, pl, e, bw, bi, rp) {
+  const saved = blockDone(p.n, e), weight = saved ? e.w : pl, reps = saved ? e.r : rp;
+  return '<div class="setrow' + (saved ? ' saved' : '') + '" data-n="' + p.n +
+    '" data-b="' + (bi ?? '') + '" data-pw="' + (pl || 0) + '" data-pr="' + rp + '">' +
+    '<button class="pickval" data-pick="w"><small>' + (bw ? '+ ВЕС' : 'ВЕС') + '</small><b>' +
+      (weight ? (bw ? '+' : '') + fmt(weight) + ' кг' : (bw ? 'свой вес' : '—')) + '</b></button>' +
+    '<button class="pickval" data-pick="r"><small>ПОВТОРЫ</small><b>' + (reps || '—') + '</b></button>' +
+    '<button class="setok" aria-label="' + (saved ? 'Изменить подход' : 'Выполнить подход') + '">' +
+      (saved ? '✓' : 'Готово') + '</button></div>';
 }
+
+let pickState = null;
+const picker = document.getElementById('picker');
+const wheelWeight = document.getElementById('wheel-weight');
+const wheelReps = document.getElementById('wheel-reps');
+function wheelValues(el, values, selected) {
+  el.innerHTML = values.map(v => '<button data-v="' + v + '"' + (v === selected ? ' class="sel"' : '') + '>' + fmt(v) + '</button>').join('');
+  const choose = b => {
+    for (const x of el.children) x.classList.toggle('sel', x === b);
+    pickState[el === wheelWeight ? 'w' : 'r'] = +b.dataset.v;
+  };
+  for (const b of el.children) b.onclick = () => { choose(b); b.scrollIntoView({block:'center', behavior:'smooth'}); };
+  requestAnimationFrame(() => el.querySelector('.sel')?.scrollIntoView({block:'center'}));
+  let timer;
+  el.onscroll = () => {
+    clearTimeout(timer); timer = setTimeout(() => {
+      const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
+      const b = [...el.children].reduce((a, x) => Math.abs(x.getBoundingClientRect().top + x.offsetHeight / 2 - mid) < Math.abs(a.getBoundingClientRect().top + a.offsetHeight / 2 - mid) ? x : a);
+      choose(b); b.scrollIntoView({block:'center', behavior:'smooth'});
+    }, 90);
+  };
+}
+function openPicker(row) {
+  const p = items(S.cur.w, S.cur.d).find(x => x.n === row.dataset.n), bw = bwEx(p.n);
+  const bi = row.dataset.b === '' ? undefined : +row.dataset.b;
+  const rec = S.log[slot(S.cur.c, S.cur.w, S.cur.d)]?.sets?.[p.n];
+  const old = bi === undefined ? rec : rec?.b?.[bi];
+  pickState = {n:p.n, bi, w:old?.w || +row.dataset.pw || 0, r:old?.r || +row.dataset.pr};
+  const step = stepOf(p.n), max = Math.max(200, Math.ceil((pickState.w * 1.5 + 20) / step) * step);
+  const weights = Array.from({length:Math.floor(max / step) + 1}, (_, i) => +(i * step).toFixed(2));
+  if (!bw && CATALOG[p.n].min > 0) weights.splice(0, Math.ceil(CATALOG[p.n].min / step));
+  wheelValues(wheelWeight, weights, pickState.w);
+  wheelValues(wheelReps, Array.from({length:40}, (_, i) => i + 1), pickState.r);
+  document.getElementById('picker-title').textContent = p.n;
+  document.getElementById('picker-delete').style.display = blockDone(p.n, old) ? 'block' : 'none';
+  picker.classList.add('on'); picker.setAttribute('aria-hidden', 'false');
+}
+function closePicker() { picker.classList.remove('on'); picker.setAttribute('aria-hidden', 'true'); pickState = null; }
+document.getElementById('picker-cancel').onclick = closePicker;
+picker.onclick = ev => { if (ev.target === picker) closePicker(); };
+document.getElementById('picker-save').onclick = () => {
+  if (!pickState) return;
+  setVal(pickState.n, 'w', pickState.w, pickState.bi);
+  setVal(pickState.n, 'r', pickState.r, pickState.bi);
+  if (navigator.vibrate) navigator.vibrate(25);
+  closePicker(); renderWork(); flash('Подход записан');
+};
+document.getElementById('picker-delete').onclick = () => {
+  if (!pickState) return;
+  setVal(pickState.n, 'w', 0, pickState.bi);
+  setVal(pickState.n, 'r', 0, pickState.bi);
+  closePicker(); renderWork(); flash('Выполнение отменено');
+};
 
 function renderWork() {
   const {c, w, d} = S.cur, list = items(w, d), rec = S.log[slot(c, w, d)] || {sets: {}};
@@ -747,15 +822,15 @@ function renderWork() {
       // 5/3/1: три рабочих подхода с разным весом, у каждого своя строка ввода
       const eb = e.b || [], tm = trainMax(p);
       low = p.b.some((b, i) => blockDone(p.n, eb[i]) && (eb[i].w || 0) < blockPlan(p, i));
-      meta = p.b.map(b => pct(b.p) + (b.amrap ? ' до отказа' : '')).join(' → ') +
+      meta = p.b.map(b => pct(b.p) + (b.amrap ? ' · 1–2 в запасе' : '')).join(' → ') +
         (tm ? ' · рабочий максимум ' + fmt(Math.round(tm * 10) / 10) + ' кг' : ' от рабочего максимума');
       // Подводка ведёт к весу первого рабочего подхода, дальше вес растёт сам
       ws = filled ? '' : warmupSets(p, blockPlan(p, 0));
       fields = p.b.map((b, i) =>
         '<div class="blkline">Подход ' + (i + 1) + ' · ' +
-          (b.amrap ? b.r + ' и больше, до предела' : plural(b.r, 'повтор', 'повтора', 'повторов')) +
+          (b.amrap ? b.r + '+ качественных, запас 1–2' : plural(b.r, 'повтор', 'повтора', 'повторов')) +
           ' · отдых ' + restOf(p, b.r) + '</div>' +
-        fieldsRow(p, blockPlan(p, i), eb[i] || {}, bw, i)).join('');
+        fieldsRow(p, blockPlan(p, i), eb[i] || {}, bw, i, b.r)).join('');
     } else {
       const pl = plan(p);
       // Своим весом без отягощения — это не недобор, а обычная работа
@@ -765,7 +840,15 @@ function renderWork() {
         ' · отдых ' + restOf(p);
       // Подводка нужна только до первого рабочего подхода
       ws = filled ? '' : warmupSets(p, pl);
-      fields = fieldsRow(p, pl, e, bw);
+      if (e.b || !filled) {
+        const eb = e.b || [];
+        fields = Array.from({length:p.s}, (_, i) => '<div class="blkline">Подход ' + (i + 1) + ' из ' + p.s + '</div>' +
+          fieldsRow(p, pl, eb[i] || {}, bw, i, p.r)).join('');
+      } else {
+        // Старые записи хранили все одинаковые подходы одной строкой.
+        fields = '<div class="blkline">Старая запись · ' + p.s + ' одинаковых подхода</div>' +
+          fieldsRow(p, pl, e, bw, undefined, p.r);
+      }
     }
     const cls = (!filled ? '' : (low ? ' low' : ' done')) + (open ? ' open' : '');
     const mark = !filled ? '' : (low ? '↓' : '✓');
@@ -783,32 +866,17 @@ function renderWork() {
   document.getElementById('w-tonnage').textContent = tonnage ? Math.round(tonnage).toLocaleString('ru-RU') + ' кг' : '—';
   document.getElementById('w-count').textContent = done + ' / ' + list.length;
 
-  for (const inp of document.querySelectorAll('#w-list input')) {
-    inp.addEventListener('change', ev => {
-      const bi = ev.target.dataset.b;
-      setVal(ev.target.dataset.n, ev.target.dataset.f, ev.target.value,
-        bi === undefined ? undefined : +bi);
-      renderWork();
-    });
-  }
-  for (const el of document.querySelectorAll('#w-list .fld.plan[data-p]')) {
-    el.onclick = () => {
-      const p = list.find(x => x.n === el.dataset.p);
-      if (byPct(p)) { flash('Здесь план считается от максимума — меняй его в настройках'); return; }
-      const cur = plan(p) || '';
-      const v = prompt(p.n + '\nПлановый вес в кг. Оставь пусто, чтобы сбросить.', cur);
-      if (v === null) return;
-      const num = parseFloat(String(v).replace(',', '.'));
-      const shown = isFinite(num) && num > 0 ? num : 0;
-      // Показанное значение уже с учётом снижения, а храним вес при нулевом,
-      // чтобы ползунок действовал и на введённое руками
-      const val = shown ? shown / (1 - S.deload) : 0;
-      S.planSet = S.planSet || {};
-      S.planSet[psKey(p)] = {v: val, t: Date.now()};
-      save(); renderWork();
-      flash(shown ? 'План: ' + fmt(shown) + ' кг' : 'План сброшен');
-    };
-  }
+  for (const b of document.querySelectorAll('#w-list .pickval')) b.onclick = () => openPicker(b.closest('.setrow'));
+  for (const b of document.querySelectorAll('#w-list .setok')) b.onclick = () => {
+    const row = b.closest('.setrow'), p = list.find(x => x.n === row.dataset.n);
+    const bi = row.dataset.b === '' ? undefined : +row.dataset.b;
+    const recSet = rec.sets[p.n], old = bi === undefined ? recSet : recSet?.b?.[bi];
+    if (blockDone(p.n, old)) { openPicker(row); return; }
+    setVal(p.n, 'w', +row.dataset.pw || 0, bi);
+    setVal(p.n, 'r', +row.dataset.pr, bi);
+    if (navigator.vibrate) navigator.vibrate(25);
+    renderWork(); flash('Подход выполнен');
+  };
   for (const t of document.querySelectorAll('#w-list .top[data-i]')) {
     t.onclick = () => {
       const k = t.dataset.i;
@@ -910,7 +978,7 @@ function renderSet() {
   document.getElementById('st-programs').innerHTML = Object.entries(PROGRAM_META).map(([id, p]) =>
     '<button data-program="' + id + '"' + (id === S.program ? ' class="on"' : '') + '>' + p.name + '</button>').join('');
   document.getElementById('st-program-note').textContent = S.program === 'split'
-    ? 'Классический 5/3/1: четыре недели, три рабочих подхода с разным весом, последний — до предела. Проценты считаются от рабочего максимума, это 90 % разового. Каждый новый цикл рабочий максимум растёт сам: плюс 5 кг на присед и тягу, 2,5 кг на жимы. История Сплита хранится отдельно.'
+    ? '5/3/1: четыре недели, три рабочих подхода с разным весом, последний — с запасом 1–2 качественных повтора. Проценты считаются от рабочего максимума, это 90 % разового. Каждый новый цикл рабочий максимум растёт сам: плюс 5 кг на присед и тягу, 2,5 кг на жимы. История Сплита хранится отдельно.'
     : 'Исходная четырёхнедельная программа. Её история и текущий цикл сохранены отдельно.';
   for (const b of document.querySelectorAll('#st-programs button')) b.onclick = () => switchProgram(b.dataset.program);
 
@@ -941,7 +1009,14 @@ function renderSet() {
       '<input inputmode="decimal" placeholder="—" data-n="' + n + '" value="' + (S.maxes[n] || '') + '"></div>';
   }).join('');
   for (const i of document.querySelectorAll('#st-maxes input'))
-    i.onchange = () => { S.maxes[i.dataset.n] = parseFloat(i.value.replace(',', '.')) || 0; save(); renderWork(); renderProg(); };
+    i.onchange = () => {
+      const v = parseFloat(i.value.replace(',', '.')) || 0;
+      S.maxes[i.dataset.n] = v;
+      if (PROGRAM.some(p => p.n === i.dataset.n && p.b)) {
+        S.tmBase = S.tmBase || {}; S.tmBase[i.dataset.n] = v;
+      }
+      save(); renderWork(); renderProg();
+    };
 
   const eqs = [...new Set(Object.values(CATALOG).map(c => c.eq))].sort();
   document.getElementById('st-steps').innerHTML = eqs.map(eq => {
