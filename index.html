@@ -187,6 +187,7 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:15px 16px;margin-bottom:12px}
+.program-card{position:sticky;top:0;z-index:14;box-shadow:0 8px 14px var(--bg);margin-top:0}
 .card h2{font-size:15px;font-weight:600;margin:0 0 12px}
 .card p.hint{font-size:12.5px;color:var(--muted);margin:-8px 0 12px}
 .programs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -291,7 +292,7 @@ svg.chart{width:100%;height:190px;display:block}
 <section id="s-set" class="screen">
   <h1>Настройки</h1>
 
-  <div class="card">
+  <div class="card program-card">
     <h2>Программа</h2>
     <div class="programs" id="st-programs"></div>
     <p class="hint" id="st-program-note" style="margin:10px 0 0"></p>
