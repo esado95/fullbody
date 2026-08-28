@@ -50,7 +50,8 @@ h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 #s-work.on,#s-set.on{display:flex;flex-direction:column;overflow:hidden}
 .work-head,.settings-head{flex:0 0 auto;background:var(--bg);padding-top:1px;position:relative;z-index:16}
 .work-scroll,.settings-scroll{flex:1;min-width:0;min-height:0;width:100%;max-width:100%;overflow-x:hidden;overflow-y:auto;
-  overscroll-behavior-x:none;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding-bottom:18px}
+  overscroll-behavior-x:none;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding-bottom:18px}
+.work-scroll{touch-action:pan-y}.settings-scroll{touch-action:auto}
 .work-scroll>*,.settings-scroll>*{max-width:100%}
 .settings-scroll .row .lab{min-width:0;overflow-wrap:anywhere}
 .work-head .stick{position:static;top:auto}
@@ -834,11 +835,14 @@ document.getElementById('picker-delete').onclick = () => {
 // Safari в установленном PWA иногда сохраняет scrollLeft даже при overflow-x:hidden.
 // Центральные области должны реагировать только на вертикальный жест.
 for (const el of document.querySelectorAll('.work-scroll,.settings-scroll')) {
-  let sx = 0, sy = 0;
+  let sx = 0, sy = 0, horizontalControl = false;
   el.addEventListener('touchstart', ev => {
-    const t = ev.touches[0]; sx = t.clientX; sy = t.clientY; el.scrollLeft = 0;
+    const t = ev.touches[0]; sx = t.clientX; sy = t.clientY;
+    horizontalControl = !!ev.target.closest('input[type="range"]');
+    el.scrollLeft = 0;
   }, {passive:true});
   el.addEventListener('touchmove', ev => {
+    if (horizontalControl) return;
     const t = ev.touches[0], dx = Math.abs(t.clientX - sx), dy = Math.abs(t.clientY - sy);
     if (dx > dy && dx > 4) ev.preventDefault();
     if (el.scrollLeft) el.scrollLeft = 0;
