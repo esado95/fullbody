@@ -48,6 +48,8 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 h1{font-size:26px;font-weight:600;margin:20px 0 2px;letter-spacing:-.02em}
 .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
 .screen{display:none}.screen.on{display:block}
+.work-head{position:sticky;top:0;z-index:16;background:var(--bg);padding-top:1px}
+.work-head .stick{position:static;top:auto}
 
 .navbar{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:var(--r);
   padding:12px 10px;margin-bottom:14px;border:1px solid var(--line)}
@@ -246,6 +248,7 @@ svg.chart{width:100%;height:190px;display:block}
 <div class="wrap">
 
 <section id="s-work" class="screen on">
+  <div class="work-head">
   <h1>Тренировка</h1>
   <p class="sub" id="w-sub">—</p>
   <div class="stick">
@@ -258,6 +261,7 @@ svg.chart{width:100%;height:190px;display:block}
     <button id="w-next" aria-label="Следующая">›</button>
   </div>
   <div class="bar"><i id="w-bar" style="width:0"></i></div>
+  </div>
   </div>
   <div id="w-list"></div>
   <div class="tot">
